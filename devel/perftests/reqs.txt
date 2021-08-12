@@ -1,0 +1,32 @@
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query1.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query2.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query3.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query4.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query5.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query6.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query7.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query8.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query9.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query10.json
+
+POST https://bsc.streamingfast.io/subgraphs/name/pancakeswap/exchange
+@query11.json

@@ -1,0 +1,11 @@
+secrets.go
+/.idea/
+/sparkle
+
+/localblocks
+/step*-v*
+/exported
+/entities
+/csvs
+.envrc
+.DS_Store

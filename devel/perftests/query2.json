@@ -1,0 +1,1 @@
+{"operationName":"tokens","variables":{"skip":100},"query":"query tokens($skip: Int!) {\n  tokens(first: 100, skip: $skip) {\n    id\n    name\n    symbol\n    totalLiquidity\n    __typename\n  }\n}\n"}

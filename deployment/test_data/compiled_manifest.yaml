@@ -1,0 +1,30 @@
+dataSources:
+  - kind: ethereum/contract
+    mapping:
+      abis:
+        - file:
+            /: /ipfs/QmajZTadknSpgsCWRz9fG6bXFHdpVXPMWpx9yMipz3VtMQ
+          name: Gravity
+      apiVersion: 0.0.4
+      entities:
+        - Gravatar
+      eventHandlers:
+        - event: 'NewGravatar(uint256,address,string,string)'
+          handler: handleNewGravatar
+        - event: 'UpdatedGravatar(uint256,address,string,string)'
+          handler: handleUpdatedGravatar
+      file:
+        /: /ipfs/QmbK8bwncci52cstF3P8Q8i4oGjrMt1pUqdv5Uf1VXqXdb
+      kind: ethereum/events
+      language: wasm/assemblyscript
+    name: Gravity
+    network: bsc
+    source:
+      abi: Gravity
+      address: '0x2E645469f354BB4F5c8a05B3b30A929361cf77eC'
+description: Gravatar for Ethereum
+repository: 'https://github.com/graphprotocol/example-subgraph'
+schema:
+  file:
+    /: /ipfs/QmbSFRGGvHM7Cn8YSjDL41diDMxN4LQUDEMqaa5VVc5sC4
+specVersion: 0.0.2

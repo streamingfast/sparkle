@@ -1,0 +1,1 @@
+{"operationName":"bundles","variables":{},"query":"query bundles {\n  bundles(where: {id: 1}, block: {number: 5543285}) {\n    id\n    ethPrice\n    __typename\n  }\n}\n"}

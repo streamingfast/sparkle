@@ -1,0 +1,11 @@
+type TestEntity @entity {
+  id: ID!
+  name: String! @parallel(step: 2)
+  set1: BigInt! @parallel(step: 1)
+  set2: BigDecimal @parallel(step: 2)
+  set3: String! @parallel(step: 3)
+  counter1: BigInt! @parallel(step: 1, type: SUM)
+  counter2: BigDecimal! @parallel(step: 2, type: SUM)
+  counter3: BigInt @parallel(step: 3, type: SUM)
+  derivedFromCounter1and2: BigDecimal! @parallel(step: 3)
+}

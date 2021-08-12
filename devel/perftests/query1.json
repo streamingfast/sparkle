@@ -1,0 +1,1 @@
+{"query":"{\n  pairDayDatas(block:{number:700000}) {\n    id\n    pairAddress\n    token0 {\n      symbol\n    }\n    token1 {\n      symbol\n    }\n    reserve0\n    reserve1\n  }\n}","variables":null,"operationName":null}

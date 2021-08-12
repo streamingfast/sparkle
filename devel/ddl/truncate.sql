@@ -1,0 +1,15 @@
+TRUNCATE TABLE sgd3.bundle;
+TRUNCATE TABLE sgd3.burn;
+TRUNCATE TABLE sgd3.cursor;
+TRUNCATE TABLE sgd3.mint;
+TRUNCATE TABLE sgd3.pair;
+TRUNCATE TABLE sgd3.pair_day_data;
+TRUNCATE TABLE sgd3.pair_hour_data;
+TRUNCATE TABLE sgd3."poi2$";
+TRUNCATE TABLE sgd3."progress$";
+TRUNCATE TABLE sgd3.swap;
+TRUNCATE TABLE sgd3.token;
+TRUNCATE TABLE sgd3.token_day_data;
+TRUNCATE TABLE sgd3.transaction;
+TRUNCATE TABLE sgd3.uniswap_day_data;
+TRUNCATE TABLE sgd3.uniswap_factory;
