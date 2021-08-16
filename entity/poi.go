@@ -18,15 +18,27 @@ func NewPOI(id string, updates map[string]map[string]Interface) *POI {
 }
 
 func generatePOI(updates map[string]map[string]Interface) []byte {
-	return nil
+	//FIXME not implemented
 
+	//sum := md5.New()
+	// generate an ordered list of the updates
+	// loop in the list, for each key+value, use a big switch to assert the type of entity, and for each item in the entity struct, output the a normalized format of bytes (?),
+	// calling sum.Write() on each key+value output
+	// then return the sum.Sum(nil)
+
+	return nil
 }
 
 // this function must be called only before saving a block
 // 1. in parallel during toCSV phase
 // 2. during linear processing
 func (p *POI) AggregateDigest(previousAggregation *POI) {
-	p.Digest = md5.Sum(append(previousAggregation.Digest, p.Digest...))
+	sum := md5.New()
+	_, err := sum.Write(append(previousAggregation.Digest, p.Digest...))
+	if err != nil {
+		panic("error generating md5sum")
+	}
+	p.Digest = sum.Sum(nil)
 }
 
 // FIXME This mechanism is used to know if we do a create or an update, but we have only a single entity in that table, called ethereum/mainnet or similar... so probably 'false' is what we want.
