@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"reflect"
 	"time"
@@ -54,6 +55,22 @@ func newDefaultIntrinsic(ctx context.Context, step int, rpcClient *rpc.Client) *
 		current: make(map[string]map[string]entity.Interface),
 		updates: make(map[string]map[string]entity.Interface),
 	}
+}
+
+func (d *defaultIntrinsic) poi() []byte {
+
+	// we ignore current
+
+	// here we sort updates entities into an array
+	//sortedUpdates := []entity.Interface{}
+
+	// we md5sum keyvalues on this array, kinda
+
+	return nil
+}
+
+func concatPOIs(prevPOI, thisPOI []byte) []byte {
+	return md5.Sum(prevPOI + thisPOI)
 }
 
 func (d *defaultIntrinsic) Save(ent entity.Interface) error {
