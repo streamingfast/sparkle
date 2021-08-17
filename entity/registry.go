@@ -19,6 +19,7 @@ func NewRegistry(entities ...Interface) *Registry {
 		interfaces: map[reflect.Type]Interface{},
 	}
 	r.Register(entities...)
+	r.Register(&POI{})
 	return r
 }
 
