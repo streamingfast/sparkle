@@ -62,11 +62,15 @@ To solve this, we introduce the notion of Stages, to prepare the data needed for
 Here is an example flow and a description of what happens in each Stage's process (numbered with #)
 
 ```
-          |  Segment 1  |  Segment 2   |  Segment 3
+           |  Segment 1  |  Segment 2   |  Segment 3
  Stage 1   |   #1        |   #2         |    #3
  Stage 2   |   #4        |   #5         |    #6
  Stage 3   |   #7        |   #8         |    #9
 ```
+
+> The actual number of Segments depends on the size of the segments, and how deep the history (in blocks) subgraph you are processing is. There could be hundreds of segments for subgraph with large history. You can also adjust the number and size of segments according to the number of machines you have available, or adjust it to the target runtime (more parallelism, more speed).
+
+> The number of stages depends on the _data dependency graph_ (see section below) of a given subgraph.
 
 *Stage 1*:
 
