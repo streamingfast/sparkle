@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/streamingfast/eth-go"
@@ -238,12 +239,26 @@ func (d *defaultIntrinsic) flushBlock(cursor string) error {
 	return d.store.BatchSave(d.ctx, d.block, d.updates, cursor)
 }
 
-func (d *defaultIntrinsic) generatePoi() (*entity.POI, error) {
-	poi := entity.NewPOI(d.networkName)
+func genPOI(networkName string, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) (*entity.POI, error) {
+	poi := entity.NewPOI(networkName)
 	count := 0
-	// TODO: Sort updated before writting to POI
-	for tblName, rows := range d.updates {
-		for id, row := range rows {
+
+	tblNames := make([]string, 0, len(updates))
+	for k := range updates {
+		tblNames = append(tblNames, k)
+	}
+	sort.Strings(tblNames)
+
+	for _, tblName := range tblNames {
+		tblUpdates := updates[tblName]
+		rowIDs := make([]string, 0, len(tblUpdates))
+		for k := range tblUpdates {
+			rowIDs = append(rowIDs, k)
+		}
+		sort.Strings(rowIDs)
+
+		for _, id := range rowIDs {
+			row := tblUpdates[id]
 			count++
 			err := poi.Write(tblName, id, row)
 			if err != nil {
@@ -252,12 +267,21 @@ func (d *defaultIntrinsic) generatePoi() (*entity.POI, error) {
 		}
 	}
 	zlog.Debug("encoded update in point", zap.Int("update_count", count))
-	err := poi.Write("blocks", d.networkName, d.Block())
+
+	err := poi.Write("blocks", networkName, blockRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to write block ref POI: %w", err)
 	}
 
 	poi.Apply()
+	return poi, nil
+}
+
+func (d *defaultIntrinsic) generatePoi() (*entity.POI, error) {
+	poi, err := genPOI(d.networkName, d.updates, d.Block())
+	if err != nil {
+		return nil, err
+	}
 
 	if d.aggregatePOI && (d.blockRef.Number() > 0) {
 		zlog.Debug("aggregating poi")
