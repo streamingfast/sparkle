@@ -78,30 +78,30 @@ Here is an example flow and a description of what happens in each Stage's proces
 
 * #4 This process starts starts with a clean slate. No previous state was accumulated
 * #5 This Segment will load the data produced by all previous Segments of the previous Stage (in this case, Segment 1 of Stage 1).  For example, it can now start processing all the pairs discovered in 1), in addition to those newly (re-)discovered in this process (they were also discovered in process #2, but that's only for the use of #6.)
-* #6 This Segment will load the data produced by all previous Segments of the previous step (in this case Segment 1 *and* 2 of Stage 1), run your aggregation methods to provide a complete view of the state needed by this step, using the functions you provide (see Aggregation Methods below)
+* #6 This Segment will load the data produced by all previous Segments of the previous Stage (in this case Segment 1 *and* 2 of Stage 1), run your aggregation methods to provide a complete view of the state needed by this Stage, using the functions you provide (see Aggregation Methods below)
 
 *Stage 3*:
 
-* #7 This process starts another time with a clean slate, but will execute more of its code and produce more data for the next step. If this is the final step, it will output all of the entities and their changes, exactly like the linear process.
-* #8 This process will load data produced by all previous Segments of the previous step (in this case, Segment 1 of Stage 2), run your aggregation methods to provide a complete view of the relevant state needed by this step.
+* #7 This process starts another time with a clean slate, but will execute more of its code and produce more data for the next Stage. If this is the final Stage, it will output all of the entities and their changes, exactly like the linear process.
+* #8 This process will load data produced by all previous Segments of the previous Stage (in this case, Segment 1 of Stage 2), run your aggregation methods to provide a complete view of the relevant state needed by this Stage.
 * #9 Similar to #8, except it will load data from Segment 1 and 2 of Stage 2 (#4 and #5).
 
 
 
 ## Aggregation Methods
 
-Each Segment of each step produces a dump of the *latest* state (entities and their values). If there were 1000 mutations to a UniswapFactory during Segment 1, the output of that Segment will only contain a single entry: the last version of that Entity. Only that value is useful to the next step's next Segment.  In the previous example, when running process #6, you will want to load data produced at #1, aggregate certain values with what was produced at #2, and start with that as the Entities available.
+Each Segment of each Stage produces a dump of the *latest* state (entities and their values). If there were 1000 mutations to a UniswapFactory during Segment 1, the output of that Segment will only contain a single entry: the last version of that Entity. Only that value is useful to the next Stage's next Segment.  In the previous example, when running process #6, you will want to load data produced at #1, aggregate certain values with what was produced at #2, and start with that as the Entities available.
 
 The `Reduce` aggregation method supports several patterns to merge data between Segments:
 
 1. Summation / averaging of numerical values (through the `Reduce...()` method)
 
-  * Ex: you use `total_transactions` to sum the number of transactions processed in step 3, data for each Segment will only cover what was seen during that Segment.
-  * By defining something like `next.TotalTransactions.Increment(prev.TotalTransactions)` on step 4, you will be able to compute the summed-up value from each Segment's result.
+  * Ex: you use `total_transactions` to sum the number of transactions processed in Stage 3, data for each Segment will only cover what was seen during that Segment.
+  * By defining something like `next.TotalTransactions.Increment(prev.TotalTransactions)` on Stage 4, you will be able to compute the summed-up value from each Segment's result.
 
 ```golang
-func (*PancakeFactory) Reduce(step int, prev, next *PancakeFactory) *PancakeFactory {
-	if step == 4 {
+func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFactory {
+	if stage == 4 {
 		// for summations, averaging
 		next.TotalLiquidityUSD.Increment(prev.ToatlLiquidityUSD)
 		next.TotalLiquidityBNB.Increment(prev.ToatlLiquidityBNB)
@@ -127,9 +127,9 @@ func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFac
 3. Keeping track of the most recent values for certain fields. NOTE: Make sure you check that the value was properly updated on the Stage you expected it to take.
 
 ```golang
-func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFactory  {
+func (next *PancakeFactory) Merge(stage int, cached *PancakeFactory) *PancakeFactory  {
 	// To keep only the most recent values from previous segments
-	if stage == 3 && prev.MutatedOnStage == 2 {
+	if stage == 3 && cached.MutatedOnStage == 2 {
 		// Reserve0 and Reserve1 were properly set on Stage 2, so we keep them from then on.
 		next.Reserve0 = prev.Reserve0
 		next.Reserve1 = prev.Reserve1
@@ -137,6 +137,43 @@ func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFac
 	return next
 }
 ```
+
+See the [generated source for this example](https://github.com/streamingfast/sparkle-pancakeswap/blob/master/exchange/generated.go#L1296)
+
+
+## Annotation of the GraphQL schema
+
+Here is a sample of the [PancakeSwap GraphQL](https://github.com/streamingfast/sparkle-pancakeswap/blob/master/subgraph/exchange.graphql) once annotated for parallelism:
+
+```graphql
+type PancakeFactory @entity {
+  ...
+  totalPairs: BigInt! @parallel(stage: 1, type: SUM)
+  totalVolumeUSD: BigDecimal! @parallel(stage: 3, type: SUM)
+  ...
+}
+type Pair @entity {
+  ...
+  name: String! @parallel(stage: 1)
+  reserve0: BigDecimal!  @parallel(stage: 2)
+  reserve1: BigDecimal!  @parallel(stage: 2)
+  ...
+}
+```
+
+Notice the `@parallel()` directive, with its stage number, and type. Types refer to the aggregation method defined above. Using these annotation, code is generated to automatically sum up or transform some _relative_ values (computed in a given Segment), into _absolute_ values, when they are summed up from each Segment's values, into the next stage.
+
+
+### A data dependency graph
+
+This creates a **dependency graph** of data. To be explicit:
+
+* We first find all the Pairs in Stage 1. `totalPairs` will be able to be computed in the first run, but it will only be the count of pairs discovered _during_ that Segment. Let's call this a _relative_ value. If the first Segment discovers 5 pairs, and the second 10 pairs, on Stage 2, the generated code will sum up Segment 1 and 2's values (5 + 10) before starting Segment 3. Segment 3 will therefore be able to rely on exact and _absolute_ values for `totalPairs` (if it were to compute anything based on it). It would not be reliable to do so _within_ Stage 1, because `totalPairs` would not have a full historical view, only a partial, Segment-centric view.
+
+* Now, before computing `totalVolumeUSD`, we will need to have `reserve0` and `reserve1` loaded properly (for those new to AMMs, dividing the reserves together give us prices). Again, we can't catch the reserves before first knowing what pairs we need to listen on. This means updating reserves on pairs need to wait to Stage 2. The dependency is: `reserve0` and `reserve1` depends on a `Pair` being created (in our example, that's [done here](https://github.com/streamingfast/sparkle-pancakeswap/blob/master/exchange/handle_factory_pair_created_event.go#L97-L112))
+
+* At the end of all Stage+Segment (a single stage being run for a given range of blocks), a flat file (imagine a JSON with an object where tables map to a list of entities, similar to a postgres table with rows) is written with the *last* values for the Entities. The idea is to provide to the next Stage's next Segment with the latest data. In our example, it means that Segment 1 of Stage 2 would write the updated reserves, and allow Stage 3's second Segment to pick those up, and know it has legit values for `reserve0` and `reserve1`, and that there will be no missing pairs.
+
 
 
 ## Memory optimization, finalization of objects
