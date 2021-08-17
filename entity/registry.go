@@ -37,6 +37,10 @@ func (r *Registry) Entities() []Interface {
 }
 
 func GetTableName(entity Interface) string {
+	if v, ok := entity.(NamedEntity); ok {
+		return v.TableName()
+	}
+
 	return GetTableNameFromType(reflect.TypeOf(entity))
 }
 

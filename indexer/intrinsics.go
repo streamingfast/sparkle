@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"reflect"
 	"time"
@@ -35,6 +34,10 @@ type defaultIntrinsic struct {
 	rpcClient *rpc.Client
 	store     storage.Store
 
+	enablePOI    bool
+	aggregatePOI bool
+	networkName  string
+
 	step int
 
 	block    *pbcodec.Block
@@ -51,26 +54,11 @@ func newDefaultIntrinsic(ctx context.Context, step int, rpcClient *rpc.Client) *
 		ctx:       ctx,
 		rpcClient: rpcClient,
 		step:      step,
+		enablePOI: false,
 
 		current: make(map[string]map[string]entity.Interface),
 		updates: make(map[string]map[string]entity.Interface),
 	}
-}
-
-func (d *defaultIntrinsic) poi() []byte {
-
-	// we ignore current
-
-	// here we sort updates entities into an array
-	//sortedUpdates := []entity.Interface{}
-
-	// we md5sum keyvalues on this array, kinda
-
-	return nil
-}
-
-func concatPOIs(prevPOI, thisPOI []byte) []byte {
-	return md5.Sum(prevPOI + thisPOI)
 }
 
 func (d *defaultIntrinsic) Save(ent entity.Interface) error {
@@ -234,7 +222,54 @@ func (d *defaultIntrinsic) startBlock(block *pbcodec.Block, step int) {
 }
 
 func (d *defaultIntrinsic) flushBlock(cursor string) error {
+	if d.enablePOI {
+		zlog.Debug("generating poi", zap.Stringer("block", d.block))
+		poi, err := d.generatePoi()
+		if err != nil {
+			return fmt.Errorf("unable to generate POI")
+		}
+
+		err = d.Save(poi)
+		if err != nil {
+			return fmt.Errorf("unable to save generated POI: %w", err)
+		}
+	}
+
 	return d.store.BatchSave(d.ctx, d.block, d.updates, cursor)
+}
+
+func (d *defaultIntrinsic) generatePoi() (*entity.POI, error) {
+	poi := entity.NewPOI(d.networkName)
+	count := 0
+	// TODO: Sort updated before writting to POI
+	for tblName, rows := range d.updates {
+		for id, row := range rows {
+			count++
+			err := poi.Write(tblName, id, row)
+			if err != nil {
+				return nil, fmt.Errorf("unable to write entity in POI: %w", err)
+			}
+		}
+	}
+	zlog.Debug("encoded update in point", zap.Int("update_count", count))
+	err := poi.Write("blocks", d.networkName, d.Block())
+	if err != nil {
+		return nil, fmt.Errorf("unable to write block ref POI: %w", err)
+	}
+
+	poi.Apply()
+
+	if d.aggregatePOI && (d.blockRef.Number() > 0) {
+		zlog.Debug("aggregating poi")
+		prevBlockNum := d.blockRef.Number() - 1
+		prevPoi := entity.NewPOI(d.networkName)
+		err = d.store.Load(d.ctx, d.networkName, prevPoi, prevBlockNum)
+		if err != nil {
+			return nil, fmt.Errorf("unable to retriebe previous POI: %w", err)
+		}
+		poi.AggregateDigest(prevPoi)
+	}
+	return poi, nil
 }
 
 func (d *defaultIntrinsic) loadCursor() (string, error) {

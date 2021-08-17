@@ -49,7 +49,8 @@ func init() {
 	indexCmd.Flags().String("dry-run-output", "./dry_run", "Path to output dry-run CSVs")
 	indexCmd.Flags().String("schema-override", "", "Override schema")
 	indexCmd.Flags().String("pprof-listen-addr", ":6060", "If non-empty, the process will listen on this address for pprof analysis (see https://golang.org/pkg/net/http/pprof/)")
-
+	indexCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
+	indexCmd.Flags().String("network-name", "ethereum/mainnet", "Blockchain network (bsc/mainnet, ethereum/mainnet, ethereum/ropsten, ...) used as a causality region for the Proof of Indexing")
 	RootCmd.AddCommand(indexCmd)
 }
 
@@ -68,6 +69,8 @@ func runIndex(cmd *cobra.Command, args []string) error {
 	dryRunBlocks := viper.GetInt64("index-cmd-dry-run-blocks")
 	dryRunOutput := viper.GetString("index-cmd-dry-run-output")
 	pprofListenAddr := viper.GetString("index-cmd-pprof-listen-addr")
+	networkName := viper.GetString("index-cmd-network-name")
+	enablePOI := viper.GetBool("index-cmd-enable-poi")
 
 	if dryRun {
 		withReversible = false
@@ -85,6 +88,8 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		zap.Bool("dry_run", dryRun),
 		zap.Int64("dry_run_blocks", dryRunBlocks),
 		zap.String("dry_run_output", dryRunOutput),
+		zap.String("network_name", networkName),
+		zap.Bool("enable_poi", enablePOI),
 	)
 
 	versionedSubgraph, err := parseSubgraphVersionedName(subgraphVersionedName)
@@ -132,6 +137,10 @@ func runIndex(cmd *cobra.Command, args []string) error {
 
 	if withReversible {
 		indexerOpts = append(indexerOpts, indexer.WithReversible())
+	}
+
+	if enablePOI {
+		indexerOpts = append(indexerOpts, indexer.WithPOI(networkName))
 	}
 
 	indexerInst := indexer.New(rpcClient, firehoseFactory, subgraphDef, indexerOpts...)

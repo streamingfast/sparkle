@@ -53,6 +53,12 @@ func WithReversible() Option {
 		i.withReversible = true
 	})
 }
+func WithPOI(networkName string) Option {
+	return optionFunc(func(i *Indexer) {
+		i.enablePOI = true
+		i.networkName = networkName
+	})
+}
 
 func UseTransactionalFlush() Option {
 	return optionFunc(func(i *Indexer) { i.useTransactionalFlush = true })
@@ -75,6 +81,9 @@ type Indexer struct {
 
 	stateLock      sync.RWMutex
 	subgraphStream *subgraphStream
+
+	networkName string
+	enablePOI   bool
 }
 
 func NewBatch(
@@ -98,6 +107,8 @@ func NewBatch(
 
 		mode: ModeBatch,
 		step: step,
+
+		enablePOI: false,
 	}
 
 	for _, opt := range opts {
@@ -143,8 +154,13 @@ func (i *Indexer) Start(makeStore StoreFactory) error {
 	intrinsics := newDefaultIntrinsic(streamCtx, i.step, i.rpcClient)
 	zlog.Info("intrinsics initiated")
 	/// read db to get the corresponing Qz.... iD
-
 	///
+
+	if i.enablePOI {
+		intrinsics.enablePOI = true
+		intrinsics.networkName = i.networkName
+		intrinsics.aggregatePOI = i.mode == ModeLive
+	}
 
 	subgraphInst := i.subgraph.New(subgraph.Base{
 		Log:        logger,

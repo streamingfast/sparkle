@@ -2,36 +2,55 @@ package entity
 
 import (
 	"crypto/md5"
+	"fmt"
+	"hash"
+
+	"github.com/ugorji/go/codec"
 )
 
 type POI struct {
 	Base
-	Digest Bytes `db:"digest" csv:"digest"`
+	Digest  Bytes `db:"digest" csv:"digest"`
+	handler *codec.MsgpackHandle
+	md5     hash.Hash
 }
 
-// watch out the word Interface is scary here, it's entity.Interface
-func NewPOI(id string, updates map[string]map[string]Interface) *POI {
+func (p *POI) TableName() string {
+	return "poi2$"
+}
+
+func NewPOI(causalityRegion string) *POI {
 	return &POI{
-		Base:   NewBase(id),
-		Digest: generatePOI(updates),
+		Base:    NewBase(causalityRegion),
+		Digest:  []byte{},
+		md5:     md5.New(),
+		handler: new(codec.MsgpackHandle),
 	}
 }
 
-func generatePOI(updates map[string]map[string]Interface) []byte {
-	//FIXME not implemented
-
-	//sum := md5.New()
-	// generate an ordered list of the updates
-	// loop in the list, for each key+value, use a big switch to assert the type of entity, and for each item in the entity struct, output the a normalized format of bytes (?),
-	// calling sum.Write() on each key+value output
-	// then return the sum.Sum(nil)
-
+func (p *POI) Write(entityType, entityID string, entityData interface{}) error {
+	var b []byte
+	enc := codec.NewEncoderBytes(&b, p.handler)
+	err := enc.Encode(entityData)
+	if err != nil {
+		return fmt.Errorf("unable to encode entity for poi: %w", err)
+	}
+	if _, err := p.md5.Write([]byte(entityType)); err != nil {
+		return fmt.Errorf("unable to encode entity type: %w", err)
+	}
+	if _, err = p.md5.Write([]byte(entityID)); err != nil {
+		return fmt.Errorf("unable to encode entity ID: %w", err)
+	}
+	if _, err = p.md5.Write(b); err != nil {
+		return fmt.Errorf("unable to encode serialized entity: %w", err)
+	}
 	return nil
 }
 
-// this function must be called only before saving a block
-// 1. in parallel during toCSV phase
-// 2. during linear processing
+func (p *POI) Apply() {
+	p.Digest = p.md5.Sum(nil)
+}
+
 func (p *POI) AggregateDigest(previousAggregation *POI) {
 	sum := md5.New()
 	_, err := sum.Write(append(previousAggregation.Digest, p.Digest...))
@@ -39,9 +58,4 @@ func (p *POI) AggregateDigest(previousAggregation *POI) {
 		panic("error generating md5sum")
 	}
 	p.Digest = sum.Sum(nil)
-}
-
-// FIXME This mechanism is used to know if we do a create or an update, but we have only a single entity in that table, called ethereum/mainnet or similar... so probably 'false' is what we want.
-func (_ *POI) SkipDBLookup() bool {
-	return false
 }

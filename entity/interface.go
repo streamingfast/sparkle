@@ -43,3 +43,7 @@ type Interface interface {
 	SetExists(exists bool)
 	SetMutated(step int)
 }
+
+type NamedEntity interface {
+	TableName() string
+}
