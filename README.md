@@ -87,27 +87,43 @@ Here is an example flow and a description of what happens in each Stage's proces
 * #9 Similar to #8, except it will load data from Segment 1 and 2 of Stage 2 (#4 and #5).
 
 
+## Staging a subgraph
+
+In the PancakeSwap example subgraph ([which you can find here](https://github.com/streamingfast/sparkle-pancakeswap/tree/master/exchange)), most of the handler code was simply a transpilation from AssemblyScript into Go. If you look at the [Burn event handler](https://github.com/streamingfast/sparkle-pancakeswap/blob/master/exchange/handle_pair_burn_event.go) you will notice it is pretty much a clone of [the `handleBurn` method](https://github.com/pancakeswap/pancake-subgraph/blob/v2/src/exchange/core.ts#L285) in the original subgraph, with a single exception:
+
+```golang
+func (s *Subgraph) HandlePairBurnEvent(ev *PairBurnEvent) error {
+	if s.StageBelow(3) {
+		return nil
+	}
+
+	trx := NewTransaction(ev.Transaction.Hash.Pretty())
+    ...
+```
+
+It starts with a check to know at which Stage we're at, and will simply short-circuit the code: do less processing. The runtime engine takes care of snapshotting the Entities, and loading them back in in the other Stages or Segments.
+
 
 ## Aggregation Methods
 
 Each Segment of each Stage produces a dump of the *latest* state (entities and their values). If there were 1000 mutations to a UniswapFactory during Segment 1, the output of that Segment will only contain a single entry: the last version of that Entity. Only that value is useful to the next Stage's next Segment.  In the previous example, when running process #6, you will want to load data produced at #1, aggregate certain values with what was produced at #2, and start with that as the Entities available.
 
-The `Reduce` aggregation method supports several patterns to merge data between Segments:
+The `Merge` aggregation method supports several patterns to merge data between Segments:
 
-1. Summation / averaging of numerical values (through the `Reduce...()` method)
+1. Summation / averaging of numerical values (through the `Merge...()` method)
 
   * Ex: you use `total_transactions` to sum the number of transactions processed in Stage 3, data for each Segment will only cover what was seen during that Segment.
   * By defining something like `next.TotalTransactions.Increment(prev.TotalTransactions)` on Stage 4, you will be able to compute the summed-up value from each Segment's result.
 
 ```golang
-func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFactory {
+func (next *PancakeFactory) Merge(stage int, cached *PancakeFactory) {
 	if stage == 4 {
 		// for summations, averaging
-		next.TotalLiquidityUSD.Increment(prev.ToatlLiquidityUSD)
-		next.TotalLiquidityBNB.Increment(prev.ToatlLiquidityBNB)
-		next.TotalVolumeUSD.Increment(prev.ToatlVolumeUSD)
-		next.TotalVolumeBNB.Increment(prev.ToatlVolumeBNB)
-		next.UntrackedVolumeUSD.Increment(prev.UntrackedVolumeUSD)
+		next.TotalLiquidityUSD.Increment(cached.TotalLiquidityUSD)
+		next.TotalLiquidityBNB.Increment(cached.TotalLiquidityBNB)
+		next.TotalVolumeUSD.Increment(cached.TotalVolumeUSD)
+		next.TotalVolumeBNB.Increment(cached.TotalVolumeBNB)
+		next.UntrackedVolumeUSD.Increment(cached.UntrackedVolumeUSD)
 	}
 	return next
 }
@@ -116,7 +132,7 @@ func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFac
 2. Min/max summation:
 
 ```golang
-func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFactory {
+func (next *PancakeFactory) Merge(stage int, cached *PancakeFactory) {
 	if stage == 4 {
         // TODO: provide example here
 	}
@@ -127,12 +143,12 @@ func (*PancakeFactory) Reduce(stage int, prev, next *PancakeFactory) *PancakeFac
 3. Keeping track of the most recent values for certain fields. NOTE: Make sure you check that the value was properly updated on the Stage you expected it to take.
 
 ```golang
-func (next *PancakeFactory) Merge(stage int, cached *PancakeFactory) *PancakeFactory  {
+func (next *PancakeFactory) Merge(stage int, cached *PancakeFactory)  {
 	// To keep only the most recent values from previous segments
 	if stage == 3 && cached.MutatedOnStage == 2 {
 		// Reserve0 and Reserve1 were properly set on Stage 2, so we keep them from then on.
-		next.Reserve0 = prev.Reserve0
-		next.Reserve1 = prev.Reserve1
+		next.Reserve0 = cached.Reserve0
+		next.Reserve1 = cached.Reserve1
 	}
 	return next
 }
@@ -204,7 +220,7 @@ Example:
 
 ```
 $ sparkle codegen ./subgraph/exchange.yaml github.com/streamingfast/mysubgraph
-$ mysubgraph create <Subgraph_NAME | mysubgraph/all>    # create  a row in `subgraph` table (current_version = nil, previsou_version = nil)
+$ mysubgraph create <Subgraph_NAME | mysubgraph/all>    # create  a row in `subgraph` table (current_version = nil, previous_version = nil)
 $ mysubgraph deploy <Subgraph_NAME | mysubgraph/all>    #  create  a row in `subgraph_deployment` &`subgraph_version` & IPS upload & `deployment_schemas` & Update `subgraph` table current_version, previous_version (MAYBE)
 $ mysubgraph inject <Subgraph_NAME | mysubgraph/all>@<VERSION>
 ```
