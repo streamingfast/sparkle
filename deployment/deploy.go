@@ -130,8 +130,8 @@ func SetupDBSchema(ctx context.Context, db *sqlx.DB, subgraphDef *subgraph.Defin
 		return fmt.Errorf("creating tables: %w", err)
 	}
 
-	if err := postgres.CreateIndexes(ctx, db, subgraphDef, schema, nil, zlog); err != nil {
-		return fmt.Errorf("creating indexes: %w", err)
-	}
+	//if err := postgres.CreateIndexes(ctx, db, subgraphDef, schema, nil, zlog); err != nil {
+	//	return fmt.Errorf("creating indexes: %w", err)
+	//}
 	return nil
 }

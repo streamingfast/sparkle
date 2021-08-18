@@ -26,6 +26,10 @@ type Sanitizable interface {
 	Sanitize()
 }
 
+type CSVProcessing interface {
+	Process(previous Interface)
+}
+
 type Cacheable interface {
 	SkipDBLookup() bool
 }

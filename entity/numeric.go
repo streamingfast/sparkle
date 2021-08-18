@@ -51,6 +51,7 @@ func (b *Float) UnmarshalJSON(data []byte) error {
 	*b = NewFloat(v)
 	return nil
 }
+
 func (b Float) MarshalCSV() ([]byte, error) {
 	return []byte(b.String()), nil
 }

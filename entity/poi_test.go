@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,14 +20,6 @@ type TestEntity struct {
 	StringArray LocalStringArray `db:"string_array,nullable"`
 }
 
-func NewTestEntity(id string) *TestEntity {
-	return &TestEntity{
-		Base:    NewBase(id),
-		Integer: NewIntFromLiteral(0),
-		Float:   NewFloatFromLiteral(0),
-	}
-}
-
 func TestPOI_WriteNilValue(t *testing.T) {
 	poi := NewPOI("test")
 	err := poi.Write("test_entities", "0x7bef660b110023fd795d101d5d63972a82438661", nil)
@@ -41,36 +32,60 @@ func TestPOI_Write(t *testing.T) {
 	stringPtr := "helloworld"
 	intPtr := NewInt(new(big.Int).SetUint64(3876123))
 	floatPtr := NewFloat(new(big.Float).SetFloat64(1823.231))
-	entity := NewTestEntity("0xb9afd8521c76c56ed4bc12c127c75f2fa9a9f2edda1468138664d4f0c324d30b")
-	entity.String = "0x7bef660b110023fd795d101d5d63972a82438661"
-	entity.Integer = NewInt(new(big.Int).SetInt64(27139))
-	entity.Float = NewFloat(new(big.Float).SetFloat64(3.1643))
-	entity.StringPtr = &stringPtr
-	entity.FloatPtr = &floatPtr
-	entity.IntegerPtr = &intPtr
-	entity.StringArray = append(entity.StringArray, "aa", "bb", "cc")
+	id := "0xb9afd8521c76c56ed4bc12c127c75f2fa9a9f2edda1468138664d4f0c324d30b"
 
-	poiA := NewPOI("test")
-	err := poiA.Write("test_entities", "0x7bef660b110023fd795d101d5d63972a82438661", entity)
-	require.NoError(t, err)
-	poiA.Apply()
+	tests := []struct {
+		name       string
+		poiID      string
+		entityType string
+		entityId   string
+		entity     *TestEntity
+	}{
+		{
+			name:       "basic-entity",
+			poiID:      "test",
+			entityType: "test_entities",
+			entityId:   "0x7bef660b110023fd795d101d5d63972a82438661",
+			entity: &TestEntity{
+				Base:        Base{ID: id},
+				String:      "",
+				Integer:     NewIntFromLiteral(0),
+				Float:       NewFloatFromLiteral(0),
+				StringPtr:   &stringPtr,
+				FloatPtr:    &floatPtr,
+				IntegerPtr:  &intPtr,
+				StringArray: []string{"aa", "bb", "cc"},
+			},
+		},
+		{
+			name:       "nil-entity",
+			poiID:      "test",
+			entityType: "test_entities",
+			entityId:   "0x7bef660b110023fd795d101d5d63972a82438661",
+			entity:     nil,
+		},
+		{
+			name:       "entity with nill value",
+			poiID:      "test",
+			entityType: "test_entities",
+			entityId:   "0x7bef660b110023fd795d101d5d63972a82438661",
+			entity: &TestEntity{
+				Base:    Base{ID: id},
+				String:  "",
+				Integer: NewIntFromLiteral(0),
+				Float:   NewFloatFromLiteral(0),
+			},
+		},
+	}
 
-	poiB := NewPOI("testb")
-	entity.String = "0x7bef660b110023fd795d101d5d63972a82438660"
-	err = poiB.Write("test_entities", "0x7bef660b110023fd795d101d5d63972a82438661", entity)
-	require.NoError(t, err)
-	poiB.Apply()
-
-	poiC := NewPOI("testb")
-	entity.StringArray = append(entity.StringArray, "dd")
-	err = poiC.Write("test_entities", "0x7bef660b110023fd795d101d5d63972a82438661", entity)
-	require.NoError(t, err)
-	poiC.Apply()
-
-	digestA := hex.EncodeToString(poiA.Digest)
-	digestB := hex.EncodeToString(poiB.Digest)
-	digestC := hex.EncodeToString(poiC.Digest)
-	assert.NotEqual(t, digestA, digestB)
-	assert.NotEqual(t, digestA, digestC)
-	assert.NotEqual(t, digestB, digestC)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			poi := NewPOI(test.poiID)
+			err := poi.Write(test.entityType, test.entityId, test.entity)
+			require.NoError(t, err)
+			poi.Apply()
+			digest := hex.EncodeToString(poi.Digest)
+			fmt.Println(digest)
+		})
+	}
 }

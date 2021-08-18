@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"sort"
@@ -224,7 +225,6 @@ func (d *defaultIntrinsic) startBlock(block *pbcodec.Block, step int) {
 
 func (d *defaultIntrinsic) flushBlock(cursor string) error {
 	if d.enablePOI {
-		zlog.Debug("generating poi", zap.Stringer("block", d.block))
 		poi, err := d.generatePOI()
 		if err != nil {
 			return fmt.Errorf("unable to generate POI")
@@ -240,7 +240,11 @@ func (d *defaultIntrinsic) flushBlock(cursor string) error {
 }
 
 func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
-
+	blk := &Blk{
+		Id:  d.block.ID(),
+		Num: d.block.Number,
+	}
+	zlog.Info("generating POI", zap.Reflect("block", blk))
 	poi := entity.NewPOI(d.networkName)
 	if err := d.Load(poi); err != nil {
 		return nil, err
@@ -250,7 +254,7 @@ func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
 		poi.Clear() // discard md5 and digest information...
 	}
 
-	if err := computePOI(poi, d.updates, d.Block()); err != nil {
+	if err := computePOI(poi, d.updates, blk); err != nil {
 		return nil, err
 	}
 
@@ -291,10 +295,9 @@ func asBlockRef(block *pbcodec.Block) *blockRef {
 	return &blockRef{id: block.ID(), num: block.Number, timestamp: block.Header.Timestamp.AsTime()}
 }
 
-func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) error {
+func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface, blockRef *Blk) error {
 	count := 0
 
-	// FIXME poi.digest must be nil always on steps 1-?4?
 	previousPOIDigest := poi.Digest
 	poi.Clear()
 
@@ -321,7 +324,10 @@ func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface,
 			}
 		}
 	}
-	zlog.Debug("encoded update in point", zap.Int("update_count", count))
+	zlog.Debug("encoded update in POI",
+		zap.Int("update_count", count),
+		zap.Reflect("block", blockRef),
+	)
 
 	err := poi.Write("blocks", poi.ID, blockRef)
 	if err != nil {
@@ -329,8 +335,15 @@ func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface,
 	}
 
 	poi.Apply()
+	zlog.Debug("unit poi", zap.String("digest", hex.EncodeToString(poi.Digest)))
 	if previousPOIDigest != nil { // we are aggregating
 		poi.AggregateDigest(previousPOIDigest)
+		zlog.Debug("aggregated poi", zap.String("digest", hex.EncodeToString(poi.Digest)))
 	}
 	return nil
+}
+
+type Blk struct {
+	Id  string
+	Num uint64
 }

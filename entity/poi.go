@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"hash"
+	"time"
 
 	"github.com/ugorji/go/codec"
 )
@@ -32,6 +33,10 @@ func NewPOI(causalityRegion string) *POI {
 func (p *POI) Clear() {
 	p.md5 = md5.New()
 	p.Digest = nil
+}
+
+func (p *POI) IsFinal(_ uint64, _ time.Time) bool {
+	return true
 }
 
 func (p *POI) Write(entityType, entityID string, entityData interface{}) error {
