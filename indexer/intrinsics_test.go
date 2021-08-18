@@ -69,8 +69,9 @@ func TestPOI(t *testing.T) {
 		},
 	}
 
+	poi := entity.NewPOI("eth/testnet")
 	// one table
-	poi, err := genPOI("eth/testnet", updates, nil)
+	err := computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest := hex.EncodeToString(poi.Digest)
 	assert.Equal(t, "033eec8ab31dece34b8a6bc4bd7dc3d1", digest)
@@ -81,19 +82,22 @@ func TestPOI(t *testing.T) {
 	}
 
 	// two tables
-	poi, err = genPOI("eth/testnet", updates, nil)
+	poi.Clear()
+	err = computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
 	assert.Equal(t, "8daa2db36c925c265204b88268aa8d4a", digest)
 
 	// two tables
-	poi, err = genPOI("eth/testnet", updates, nil)
+	poi.Clear()
+	err = computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
 	assert.Equal(t, "8daa2db36c925c265204b88268aa8d4a", digest)
 
 	// with blockref
-	poi, err = genPOI("eth/testnet", updates, &testBlockRef{
+	poi.Clear()
+	err = computePOI(poi, updates, &testBlockRef{
 		id:     "deadbeef",
 		number: 234,
 	})

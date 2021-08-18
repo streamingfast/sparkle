@@ -240,21 +240,20 @@ func (d *defaultIntrinsic) flushBlock(cursor string) error {
 }
 
 func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
-	poi, err := createPOI(d.networkName, d.updates, d.Block())
-	if err != nil {
+
+	poi := entity.NewPOI(d.networkName)
+	if err := d.Load(poi); err != nil {
 		return nil, err
 	}
 
-	if d.aggregatePOI && (d.blockRef.Number() > 0) {
-		zlog.Debug("aggregating poi")
-		prevBlockNum := d.blockRef.Number() - 1
-		prevPoi := entity.NewPOI(d.networkName)
-		err = d.store.Load(d.ctx, d.networkName, prevPoi, prevBlockNum)
-		if err != nil {
-			return nil, fmt.Errorf("unable to retriebe previous POI: %w", err)
-		}
-		poi.AggregateDigest(prevPoi)
+	if !d.aggregatePOI {
+		poi.Clear() // discard md5 and digest information...
 	}
+
+	if err := computePOI(poi, d.updates, d.Block()); err != nil {
+		return nil, err
+	}
+
 	return poi, nil
 }
 
@@ -292,9 +291,12 @@ func asBlockRef(block *pbcodec.Block) *blockRef {
 	return &blockRef{id: block.ID(), num: block.Number, timestamp: block.Header.Timestamp.AsTime()}
 }
 
-func createPOI(networkName string, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) (*entity.POI, error) {
-	poi := entity.NewPOI(networkName)
+func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) error {
 	count := 0
+
+	// FIXME poi.digest must be nil always on steps 1-?4?
+	previousPOIDigest := poi.Digest
+	poi.Clear()
 
 	tblNames := make([]string, 0, len(updates))
 	for k := range updates {
@@ -315,17 +317,20 @@ func createPOI(networkName string, updates map[string]map[string]entity.Interfac
 			count++
 			err := poi.Write(tblName, id, row)
 			if err != nil {
-				return nil, fmt.Errorf("unable to write entity in POI: %w", err)
+				return fmt.Errorf("unable to write entity in POI: %w", err)
 			}
 		}
 	}
 	zlog.Debug("encoded update in point", zap.Int("update_count", count))
 
-	err := poi.Write("blocks", networkName, blockRef)
+	err := poi.Write("blocks", poi.ID, blockRef)
 	if err != nil {
-		return nil, fmt.Errorf("unable to write block ref POI: %w", err)
+		return fmt.Errorf("unable to write block ref POI: %w", err)
 	}
 
 	poi.Apply()
-	return poi, nil
+	if previousPOIDigest != nil { // we are aggregating
+		poi.AggregateDigest(previousPOIDigest)
+	}
+	return nil
 }

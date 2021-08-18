@@ -19,18 +19,24 @@ func (p *POI) TableName() string {
 	return "poi2$"
 }
 
+var poiDefaultHandler = new(codec.MsgpackHandle)
+
 func NewPOI(causalityRegion string) *POI {
 	return &POI{
-		Base:    NewBase(causalityRegion),
-		Digest:  []byte{},
-		md5:     md5.New(),
-		handler: new(codec.MsgpackHandle),
+		Base:   NewBase(causalityRegion),
+		Digest: nil,
+		md5:    md5.New(),
 	}
+}
+
+func (p *POI) Clear() {
+	p.md5 = md5.New()
+	p.Digest = nil
 }
 
 func (p *POI) Write(entityType, entityID string, entityData interface{}) error {
 	var b []byte
-	enc := codec.NewEncoderBytes(&b, p.handler)
+	enc := codec.NewEncoderBytes(&b, poiDefaultHandler)
 	err := enc.Encode(entityData)
 	if err != nil {
 		return fmt.Errorf("unable to encode entity for poi: %w", err)
@@ -51,9 +57,9 @@ func (p *POI) Apply() {
 	p.Digest = p.md5.Sum(nil)
 }
 
-func (p *POI) AggregateDigest(previousAggregation *POI) {
+func (p *POI) AggregateDigest(previousDigest []byte) {
 	sum := md5.New()
-	_, err := sum.Write(append(previousAggregation.Digest, p.Digest...))
+	_, err := sum.Write(append(previousDigest, p.Digest...))
 	if err != nil {
 		panic("error generating md5sum")
 	}
