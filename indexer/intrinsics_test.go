@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"testing"
-	"time"
 
 	"github.com/streamingfast/sparkle/subgraph"
 
@@ -74,7 +73,7 @@ func TestPOI(t *testing.T) {
 	err := computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest := hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "033eec8ab31dece34b8a6bc4bd7dc3d1", digest)
+	assert.Equal(t, "5a2e4f825a79779529815f99d6964c0a", digest)
 
 	updates["accounts"] = map[string]entity.Interface{
 		"one": testgraph.NewTestEntity("1"),
@@ -86,41 +85,23 @@ func TestPOI(t *testing.T) {
 	err = computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "8daa2db36c925c265204b88268aa8d4a", digest)
+	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
 
 	// two tables
 	poi.Clear()
 	err = computePOI(poi, updates, nil)
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "8daa2db36c925c265204b88268aa8d4a", digest)
+	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
 
 	// with blockref
 	poi.Clear()
-	err = computePOI(poi, updates, &testBlockRef{
-		id:     "deadbeef",
-		number: 234,
+	err = computePOI(poi, updates, &Blk{
+		Id:  "deadbeef",
+		Num: 234,
 	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "66a67edd4c3fdd4a2f8bf7182d8f60e8", digest)
+	assert.Equal(t, "3fa16e30e49cbe386774fd5ec9663f1f", digest)
 
-}
-
-type testBlockRef struct {
-	id        string
-	number    uint64
-	timestamp time.Time
-}
-
-func (b *testBlockRef) ID() string {
-	return b.id
-}
-
-func (b *testBlockRef) Number() uint64 {
-	return b.number
-}
-
-func (b *testBlockRef) Timestamp() time.Time {
-	return b.timestamp
 }
