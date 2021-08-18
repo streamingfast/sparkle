@@ -1,8 +1,6 @@
 package entity
 
 import (
-	"encoding/hex"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -18,14 +16,6 @@ type TestEntity struct {
 	FloatPtr    *Float           `db:"float_ptr,nullable" `
 	IntegerPtr  *Int             `db:"integer_ptr,nullable" `
 	StringArray LocalStringArray `db:"string_array,nullable"`
-}
-
-func TestPOI_WriteNilValue(t *testing.T) {
-	poi := NewPOI("test")
-	err := poi.Write("test_entities", "0x7bef660b110023fd795d101d5d63972a82438661", nil)
-	require.NoError(t, err)
-	digest := hex.EncodeToString(poi.Digest)
-	fmt.Println(digest)
 }
 
 func TestPOI_Write(t *testing.T) {
@@ -58,13 +48,6 @@ func TestPOI_Write(t *testing.T) {
 			},
 		},
 		{
-			name:       "nil-entity",
-			poiID:      "test",
-			entityType: "test_entities",
-			entityId:   "0x7bef660b110023fd795d101d5d63972a82438661",
-			entity:     nil,
-		},
-		{
 			name:       "entity with nill value",
 			poiID:      "test",
 			entityType: "test_entities",
@@ -81,11 +64,9 @@ func TestPOI_Write(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			poi := NewPOI(test.poiID)
-			err := poi.Write(test.entityType, test.entityId, test.entity)
+			err := poi.AddEnt(test.entityType, test.entity)
 			require.NoError(t, err)
 			poi.Apply()
-			digest := hex.EncodeToString(poi.Digest)
-			fmt.Println(digest)
 		})
 	}
 }

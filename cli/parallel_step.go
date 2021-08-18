@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	manifestlib "github.com/streamingfast/sparkle/manifest"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/streamingfast/derr"
@@ -37,9 +39,7 @@ func init() {
 	parallelStepCmd.Flags().BoolP("flush-entities", "b", false, "Flush entities to 'output-path'")
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
-
 	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
-	parallelStepCmd.Flags().String("network-name", "ethereum/mainnet", "Blockchain network (bsc/mainnet, ethereum/mainnet, ethereum/ropsten, ...) used as a causality region for the Proof of Indexing")
 
 	parallelCmd.AddCommand(parallelStepCmd)
 }
@@ -58,7 +58,6 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	entitiesPath := viper.GetString("parallel-step-cmd-entities-path")
 	storeSnapshot := viper.GetBool("parallel-step-cmd-store-snapshot")
 	debugCache := viper.GetBool("parallel-step-cmd-debug-cache")
-	networkName := viper.GetString("parallel-step-cmd-network-name")
 	enablePOI := viper.GetBool("parallel-step-cmd-enable-poi")
 
 	zlog.Info("fetching transactions for network",
@@ -73,7 +72,6 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		zap.Bool("flush_entities", flushEntities),
 		zap.Bool("store_snapshots", storeSnapshot),
 		zap.Bool("debug_cache", debugCache),
-		zap.String("network_name", networkName),
 		zap.Bool("enable_poi", enablePOI),
 	)
 
@@ -127,9 +125,15 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		return squashableStore, nil
 	}
 
+	// TODO: this can be stored in the generated subgraph
+	manifest, err := manifestlib.DecodeYamlManifest(subgraphDef.Manifest)
+	if err != nil {
+		return fmt.Errorf("unable to decode manifest")
+	}
+
 	var indexerOpts []indexer.Option
 	if enablePOI {
-		indexerOpts = append(indexerOpts, indexer.WithPOI(networkName))
+		indexerOpts = append(indexerOpts, indexer.WithPOI(manifest.Network()))
 	}
 
 	indexer := indexer.NewBatch(

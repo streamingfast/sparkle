@@ -318,19 +318,26 @@ func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface,
 		for _, id := range rowIDs {
 			row := tblUpdates[id]
 			count++
-			err := poi.Write(tblName, id, row)
-			if err != nil {
+
+			if row == nil {
+				if err := poi.RemoveEnt(tblName, id); err != nil {
+					return fmt.Errorf("unable to write entity in POI: %w", err)
+				}
+				continue
+			}
+
+			if err := poi.AddEnt(tblName, row); err != nil {
 				return fmt.Errorf("unable to write entity in POI: %w", err)
 			}
 		}
 	}
+
 	zlog.Debug("encoded update in POI",
 		zap.Int("update_count", count),
 		zap.Reflect("block", blockRef),
 	)
 
-	err := poi.Write("blocks", poi.ID, blockRef)
-	if err != nil {
+	if err := poi.AddEnt("blocks", blockRef); err != nil {
 		return fmt.Errorf("unable to write block ref POI: %w", err)
 	}
 

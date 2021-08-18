@@ -5,21 +5,16 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/streamingfast/sparkle/subgraph"
-
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	"github.com/streamingfast/eth-go"
+	"github.com/streamingfast/sparkle/entity"
 	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
-
 	"github.com/streamingfast/sparkle/storage/dryrunstore"
-	"go.uber.org/zap"
-
+	"github.com/streamingfast/sparkle/subgraph"
 	"github.com/streamingfast/sparkle/testgraph/testgraph"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/streamingfast/sparkle/entity"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestStore_Cache(t *testing.T) {
@@ -70,10 +65,13 @@ func TestPOI(t *testing.T) {
 
 	poi := entity.NewPOI("eth/testnet")
 	// one table
-	err := computePOI(poi, updates, nil)
+	err := computePOI(poi, updates, &Blk{
+		Id:  "aa",
+		Num: 10,
+	})
 	require.NoError(t, err)
 	digest := hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "5a2e4f825a79779529815f99d6964c0a", digest)
+	assert.Equal(t, "2479d5bb22d6648b56cda5e5d461bf85", digest)
 
 	updates["accounts"] = map[string]entity.Interface{
 		"one": testgraph.NewTestEntity("1"),
@@ -82,17 +80,22 @@ func TestPOI(t *testing.T) {
 
 	// two tables
 	poi.Clear()
-	err = computePOI(poi, updates, nil)
+	err = computePOI(poi, updates, &Blk{
+		Id:  "bb",
+		Num: 11,
+	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
+	assert.Equal(t, "8289d942b6b23399fc27555585ce619f", digest)
 
-	// two tables
 	poi.Clear()
-	err = computePOI(poi, updates, nil)
+	err = computePOI(poi, updates, &Blk{
+		Id:  "cc",
+		Num: 22,
+	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
+	assert.Equal(t, "0566a532606d0387bc069bd9128b90d7", digest)
 
 	// with blockref
 	poi.Clear()
@@ -102,6 +105,6 @@ func TestPOI(t *testing.T) {
 	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "3fa16e30e49cbe386774fd5ec9663f1f", digest)
+	assert.Equal(t, "08207c821d70a46918431e7f5d1872d6", digest)
 
 }

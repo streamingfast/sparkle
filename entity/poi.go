@@ -2,9 +2,12 @@ package entity
 
 import (
 	"crypto/md5"
+	"encoding/csv"
 	"fmt"
 	"hash"
 	"time"
+
+	"github.com/jszwec/csvutil"
 
 	"github.com/ugorji/go/codec"
 )
@@ -39,21 +42,31 @@ func (p *POI) IsFinal(_ uint64, _ time.Time) bool {
 	return true
 }
 
-func (p *POI) Write(entityType, entityID string, entityData interface{}) error {
-	var b []byte
-	enc := codec.NewEncoderBytes(&b, poiDefaultHandler)
-	err := enc.Encode(entityData)
-	if err != nil {
-		return fmt.Errorf("unable to encode entity for poi: %w", err)
-	}
+func (p *POI) RemoveEnt(entityType, entityId string) error {
 	if _, err := p.md5.Write([]byte(entityType)); err != nil {
 		return fmt.Errorf("unable to encode entity type: %w", err)
 	}
-	if _, err = p.md5.Write([]byte(entityID)); err != nil {
-		return fmt.Errorf("unable to encode entity ID: %w", err)
+	if _, err := p.md5.Write([]byte(entityId)); err != nil {
+		return fmt.Errorf("unable to encode entity id: %w", err)
 	}
-	if _, err = p.md5.Write(b); err != nil {
+	return nil
+}
+
+func (p *POI) AddEnt(entityType string, ent interface{}) error {
+	if _, err := p.md5.Write([]byte(entityType)); err != nil {
+		return fmt.Errorf("unable to encode entity type: %w", err)
+	}
+
+	csvWriter := csv.NewWriter(p.md5)
+	enc := csvutil.NewEncoder(csvWriter)
+	enc.Tag = "csv"
+	enc.AutoHeader = false
+	if err := enc.Encode(ent); err != nil {
 		return fmt.Errorf("unable to encode serialized entity: %w", err)
+	}
+	csvWriter.Flush()
+	if err := csvWriter.Error(); err != nil {
+		return fmt.Errorf("error flushing csv encoder: %w", err)
 	}
 	return nil
 }

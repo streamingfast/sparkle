@@ -18,10 +18,8 @@ func TestEncoding(t *testing.T) {
 	reserver1WithDecimal := NewFloat(ConvertTokenToDecimal(reserve1, tokenDecimal.Int().Int64()))
 	price := NewFloat(new(big.Float).Quo(reserver0WithDecimal.Float(), reserver1WithDecimal.Float()))
 
-	fmt.Println(price)
 	cnt, err := json.Marshal(price)
 	require.NoError(t, err)
-	fmt.Println(string(cnt))
 
 	readPrice := &Float{}
 	err = json.Unmarshal(cnt, &readPrice)

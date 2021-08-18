@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	manifestlib "github.com/streamingfast/sparkle/manifest"
+
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -50,7 +52,6 @@ func init() {
 	indexCmd.Flags().String("schema-override", "", "Override schema")
 	indexCmd.Flags().String("pprof-listen-addr", ":6060", "If non-empty, the process will listen on this address for pprof analysis (see https://golang.org/pkg/net/http/pprof/)")
 	indexCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
-	indexCmd.Flags().String("network-name", "ethereum/mainnet", "Blockchain network (bsc/mainnet, ethereum/mainnet, ethereum/ropsten, ...) used as a causality region for the Proof of Indexing")
 	RootCmd.AddCommand(indexCmd)
 }
 
@@ -69,7 +70,6 @@ func runIndex(cmd *cobra.Command, args []string) error {
 	dryRunBlocks := viper.GetInt64("index-cmd-dry-run-blocks")
 	dryRunOutput := viper.GetString("index-cmd-dry-run-output")
 	pprofListenAddr := viper.GetString("index-cmd-pprof-listen-addr")
-	networkName := viper.GetString("index-cmd-network-name")
 	enablePOI := viper.GetBool("index-cmd-enable-poi")
 
 	if dryRun {
@@ -88,7 +88,6 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		zap.Bool("dry_run", dryRun),
 		zap.Int64("dry_run_blocks", dryRunBlocks),
 		zap.String("dry_run_output", dryRunOutput),
-		zap.String("network_name", networkName),
 		zap.Bool("enable_poi", enablePOI),
 	)
 
@@ -139,8 +138,14 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		indexerOpts = append(indexerOpts, indexer.WithReversible())
 	}
 
+	// TODO: this can be stored in the generated subgraph
+	manifest, err := manifestlib.DecodeYamlManifest(subgraphDef.Manifest)
+	if err != nil {
+		return fmt.Errorf("unable to decode manifest")
+	}
+
 	if enablePOI {
-		indexerOpts = append(indexerOpts, indexer.WithPOI(networkName))
+		indexerOpts = append(indexerOpts, indexer.WithPOI(manifest.Network()))
 	}
 
 	indexerInst := indexer.New(rpcClient, firehoseFactory, subgraphDef, indexerOpts...)
