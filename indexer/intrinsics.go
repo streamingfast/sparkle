@@ -225,7 +225,7 @@ func (d *defaultIntrinsic) startBlock(block *pbcodec.Block, step int) {
 func (d *defaultIntrinsic) flushBlock(cursor string) error {
 	if d.enablePOI {
 		zlog.Debug("generating poi", zap.Stringer("block", d.block))
-		poi, err := d.generatePoi()
+		poi, err := d.generatePOI()
 		if err != nil {
 			return fmt.Errorf("unable to generate POI")
 		}
@@ -239,46 +239,8 @@ func (d *defaultIntrinsic) flushBlock(cursor string) error {
 	return d.store.BatchSave(d.ctx, d.block, d.updates, cursor)
 }
 
-func genPOI(networkName string, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) (*entity.POI, error) {
-	poi := entity.NewPOI(networkName)
-	count := 0
-
-	tblNames := make([]string, 0, len(updates))
-	for k := range updates {
-		tblNames = append(tblNames, k)
-	}
-	sort.Strings(tblNames)
-
-	for _, tblName := range tblNames {
-		tblUpdates := updates[tblName]
-		rowIDs := make([]string, 0, len(tblUpdates))
-		for k := range tblUpdates {
-			rowIDs = append(rowIDs, k)
-		}
-		sort.Strings(rowIDs)
-
-		for _, id := range rowIDs {
-			row := tblUpdates[id]
-			count++
-			err := poi.Write(tblName, id, row)
-			if err != nil {
-				return nil, fmt.Errorf("unable to write entity in POI: %w", err)
-			}
-		}
-	}
-	zlog.Debug("encoded update in point", zap.Int("update_count", count))
-
-	err := poi.Write("blocks", networkName, blockRef)
-	if err != nil {
-		return nil, fmt.Errorf("unable to write block ref POI: %w", err)
-	}
-
-	poi.Apply()
-	return poi, nil
-}
-
-func (d *defaultIntrinsic) generatePoi() (*entity.POI, error) {
-	poi, err := genPOI(d.networkName, d.updates, d.Block())
+func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
+	poi, err := createPOI(d.networkName, d.updates, d.Block())
 	if err != nil {
 		return nil, err
 	}
@@ -328,4 +290,42 @@ func (b blockRef) Timestamp() time.Time {
 
 func asBlockRef(block *pbcodec.Block) *blockRef {
 	return &blockRef{id: block.ID(), num: block.Number, timestamp: block.Header.Timestamp.AsTime()}
+}
+
+func createPOI(networkName string, updates map[string]map[string]entity.Interface, blockRef subgraph.BlockRef) (*entity.POI, error) {
+	poi := entity.NewPOI(networkName)
+	count := 0
+
+	tblNames := make([]string, 0, len(updates))
+	for k := range updates {
+		tblNames = append(tblNames, k)
+	}
+	sort.Strings(tblNames)
+
+	for _, tblName := range tblNames {
+		tblUpdates := updates[tblName]
+		rowIDs := make([]string, 0, len(tblUpdates))
+		for k := range tblUpdates {
+			rowIDs = append(rowIDs, k)
+		}
+		sort.Strings(rowIDs)
+
+		for _, id := range rowIDs {
+			row := tblUpdates[id]
+			count++
+			err := poi.Write(tblName, id, row)
+			if err != nil {
+				return nil, fmt.Errorf("unable to write entity in POI: %w", err)
+			}
+		}
+	}
+	zlog.Debug("encoded update in point", zap.Int("update_count", count))
+
+	err := poi.Write("blocks", networkName, blockRef)
+	if err != nil {
+		return nil, fmt.Errorf("unable to write block ref POI: %w", err)
+	}
+
+	poi.Apply()
+	return poi, nil
 }
