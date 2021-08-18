@@ -4,10 +4,10 @@ type Base struct {
 	ID              string      `db:"id" csv:"id"` // text key
 	VID             uint64      `db:"vid" csv:"-"` // version
 	BlockRange      *BlockRange `db:"block_range" csv:"block_range"`
-	UpdatedBlockNum uint64      `db:"_updated_block_number" csv:"updated_block_number"`
+	UpdatedBlockNum uint64      `db:"_updated_block_number" csv:"updated_block_number" codec:"-"`
 	exists          bool
 
-	MutatedOnStep int `db:"-" csv:"-"`
+	MutatedOnStep int `db:"-" csv:"-" codec:"-"`
 }
 
 func NewBase(id string) Base {
