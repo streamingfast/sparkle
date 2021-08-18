@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
 
 	"github.com/streamingfast/sparkle/subgraph"
@@ -57,4 +58,50 @@ func TestStore_Cache(t *testing.T) {
 	err = int.Load(testEntOther)
 	require.NoError(t, err)
 	assert.Equal(t, entity.NewIntFromLiteral(2), testEntOther.Set1)
+}
+
+func TestPOI(t *testing.T) {
+	updates := map[string]map[string]entity.Interface{
+		"friends": map[string]entity.Interface{
+			"three": testgraph.NewTestEntity("3"),
+			"four":  testgraph.NewTestEntity("4"),
+		},
+	}
+
+	poi := entity.NewPOI("eth/testnet")
+	// one table
+	err := computePOI(poi, updates, nil)
+	require.NoError(t, err)
+	digest := hex.EncodeToString(poi.Digest)
+	assert.Equal(t, "5a2e4f825a79779529815f99d6964c0a", digest)
+
+	updates["accounts"] = map[string]entity.Interface{
+		"one": testgraph.NewTestEntity("1"),
+		"two": testgraph.NewTestEntity("2"),
+	}
+
+	// two tables
+	poi.Clear()
+	err = computePOI(poi, updates, nil)
+	require.NoError(t, err)
+	digest = hex.EncodeToString(poi.Digest)
+	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
+
+	// two tables
+	poi.Clear()
+	err = computePOI(poi, updates, nil)
+	require.NoError(t, err)
+	digest = hex.EncodeToString(poi.Digest)
+	assert.Equal(t, "70a4f35f99fff6d7ad7559d247f8c9bc", digest)
+
+	// with blockref
+	poi.Clear()
+	err = computePOI(poi, updates, &Blk{
+		Id:  "deadbeef",
+		Num: 234,
+	})
+	require.NoError(t, err)
+	digest = hex.EncodeToString(poi.Digest)
+	assert.Equal(t, "3fa16e30e49cbe386774fd5ec9663f1f", digest)
+
 }

@@ -68,10 +68,7 @@ func (s *Store) OpenOutputFiles() error {
 	return nil
 }
 
-//func (s *Store) Registry() *entity.Registry { return s.registry }
-
 func (s *Store) BatchSave(ctx context.Context, block *pbcodec.Block, updates map[string]map[string]entity.Interface, cursor string) (err error) {
-	fmt.Println("BLOCK", block.Number)
 	for tblName, rows := range updates {
 		exporter := s.csvExporters[tblName]
 		cachedTable := s.Cache[tblName]

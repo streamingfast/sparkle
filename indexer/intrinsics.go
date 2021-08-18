@@ -2,8 +2,10 @@ package indexer
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/streamingfast/eth-go"
@@ -34,6 +36,10 @@ type defaultIntrinsic struct {
 	rpcClient *rpc.Client
 	store     storage.Store
 
+	enablePOI    bool
+	aggregatePOI bool
+	networkName  string
+
 	step int
 
 	block    *pbcodec.Block
@@ -50,6 +56,7 @@ func newDefaultIntrinsic(ctx context.Context, step int, rpcClient *rpc.Client) *
 		ctx:       ctx,
 		rpcClient: rpcClient,
 		step:      step,
+		enablePOI: false,
 
 		current: make(map[string]map[string]entity.Interface),
 		updates: make(map[string]map[string]entity.Interface),
@@ -217,7 +224,41 @@ func (d *defaultIntrinsic) startBlock(block *pbcodec.Block, step int) {
 }
 
 func (d *defaultIntrinsic) flushBlock(cursor string) error {
+	if d.enablePOI {
+		poi, err := d.generatePOI()
+		if err != nil {
+			return fmt.Errorf("unable to generate POI")
+		}
+
+		err = d.Save(poi)
+		if err != nil {
+			return fmt.Errorf("unable to save generated POI: %w", err)
+		}
+	}
+
 	return d.store.BatchSave(d.ctx, d.block, d.updates, cursor)
+}
+
+func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
+	blk := &Blk{
+		Id:  d.block.ID(),
+		Num: d.block.Number,
+	}
+	zlog.Info("generating POI", zap.Reflect("block", blk))
+	poi := entity.NewPOI(d.networkName)
+	if err := d.Load(poi); err != nil {
+		return nil, err
+	}
+
+	if !d.aggregatePOI {
+		poi.Clear() // discard md5 and digest information...
+	}
+
+	if err := computePOI(poi, d.updates, blk); err != nil {
+		return nil, err
+	}
+
+	return poi, nil
 }
 
 func (d *defaultIntrinsic) loadCursor() (string, error) {
@@ -252,4 +293,57 @@ func (b blockRef) Timestamp() time.Time {
 
 func asBlockRef(block *pbcodec.Block) *blockRef {
 	return &blockRef{id: block.ID(), num: block.Number, timestamp: block.Header.Timestamp.AsTime()}
+}
+
+func computePOI(poi *entity.POI, updates map[string]map[string]entity.Interface, blockRef *Blk) error {
+	count := 0
+
+	previousPOIDigest := poi.Digest
+	poi.Clear()
+
+	tblNames := make([]string, 0, len(updates))
+	for k := range updates {
+		tblNames = append(tblNames, k)
+	}
+	sort.Strings(tblNames)
+
+	for _, tblName := range tblNames {
+		tblUpdates := updates[tblName]
+		rowIDs := make([]string, 0, len(tblUpdates))
+		for k := range tblUpdates {
+			rowIDs = append(rowIDs, k)
+		}
+		sort.Strings(rowIDs)
+
+		for _, id := range rowIDs {
+			row := tblUpdates[id]
+			count++
+			err := poi.Write(tblName, id, row)
+			if err != nil {
+				return fmt.Errorf("unable to write entity in POI: %w", err)
+			}
+		}
+	}
+	zlog.Debug("encoded update in POI",
+		zap.Int("update_count", count),
+		zap.Reflect("block", blockRef),
+	)
+
+	err := poi.Write("blocks", poi.ID, blockRef)
+	if err != nil {
+		return fmt.Errorf("unable to write block ref POI: %w", err)
+	}
+
+	poi.Apply()
+	zlog.Debug("unit poi", zap.String("digest", hex.EncodeToString(poi.Digest)))
+	if previousPOIDigest != nil { // we are aggregating
+		poi.AggregateDigest(previousPOIDigest)
+		zlog.Debug("aggregated poi", zap.String("digest", hex.EncodeToString(poi.Digest)))
+	}
+	return nil
+}
+
+type Blk struct {
+	Id  string
+	Num uint64
 }

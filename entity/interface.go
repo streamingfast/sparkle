@@ -26,6 +26,10 @@ type Sanitizable interface {
 	Sanitize()
 }
 
+type CSVProcessing interface {
+	Process(previous Interface)
+}
+
 type Cacheable interface {
 	SkipDBLookup() bool
 }
@@ -42,4 +46,8 @@ type Interface interface {
 	Exists() bool
 	SetExists(exists bool)
 	SetMutated(step int)
+}
+
+type NamedEntity interface {
+	TableName() string
 }

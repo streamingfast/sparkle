@@ -127,6 +127,40 @@ create table if not exists {{ $schema }}.cursor
 );
 alter table {{ $schema }}.cursor owner to graph;
 
+create table {{ $schema }}.poi2$
+(
+    digest      bytea     not null,
+    id          text      not null,
+    vid         bigserial not null
+        constraint poi2$_pkey
+            primary key,
+    block_range int4range not null,
+	_updated_block_number  numeric not null,
+    constraint poi2$_id_block_range_excl
+        exclude using gist (id with =, block_range with &&)
+);
+
+alter table {{ $schema }}.poi2$
+    owner to graph;
+
+create index brin_poi2$
+    on {{ $schema }}.poi2$ using brin (lower(block_range), COALESCE(upper(block_range), 2147483647), vid);
+
+CREATE INDEX poi2$_updated_block_number
+    ON {{ $schema }}.poi2$ USING btree
+	(_updated_block_number ASC NULLS LAST)
+	TABLESPACE pg_default;
+
+create index poi2$_block_range_closed
+    on {{ $schema }}.poi2$ (COALESCE(upper(block_range), 2147483647))
+    where (COALESCE(upper(block_range), 2147483647) < 2147483647);
+
+create index attr_12_0_poi2$_digest
+    on {{ $schema }}.poi2$ (digest);
+
+create index attr_12_1_poi2$_id
+    on {{ $schema }}.poi2$ ("left"(id, 256));
+
 create table if not exists {{ $schema }}.dynamic_data_source_xxx
 (
 	id text not null,

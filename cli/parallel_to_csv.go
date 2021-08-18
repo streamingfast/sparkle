@@ -289,7 +289,6 @@ func (ts *TableShard) Run() (*tableShardMetrics, error) {
 	if ts.metrics.lastProcessBlock != nil {
 		for _, ent := range ts.entities {
 			if ent == nil {
-				fmt.Println("ENT IS NIL")
 				continue
 			}
 
@@ -356,10 +355,15 @@ func (ts *TableShard) processEntityFile(filename string) error {
 				prev.GetBlockRange().EndBlock = currentBlock.BlockNum
 				prev.SetUpdatedBlockNum(currentBlock.BlockNum)
 
+				if ts.tableName == "poi2$" {
+					ent = processProofOfIndex(prev, ent)
+				}
+
 				if err := ts.writeEntity(currentBlock.BlockNum, prev); err != nil {
 					return fmt.Errorf("write csv encoded: %w", err)
 				}
 			}
+
 			if ent != nil {
 				ent.SetUpdatedBlockNum(currentBlock.BlockNum)
 				ts.entities[id] = ent
@@ -367,7 +371,6 @@ func (ts *TableShard) processEntityFile(filename string) error {
 
 			if ts.metrics.shouldPurge() {
 				for id, ent := range ts.entities {
-
 					if purgeableEntity, ok := ent.(entity.Finalizable); ok {
 						if purgeableEntity.IsFinal(currentBlock.BlockNum, currentBlock.BlockTimestamp) {
 							if ent != nil {
@@ -395,4 +398,18 @@ func (ts *TableShard) processEntityFile(filename string) error {
 		}
 	}
 	return nil
+}
+
+func processProofOfIndex(prev, cur entity.Interface) entity.Interface {
+	previous, ok := prev.(*entity.POI)
+	if !ok {
+		return cur
+	}
+
+	current, ok := cur.(*entity.POI)
+	if !ok {
+		return cur
+	}
+	current.AggregateDigest(previous.Digest)
+	return current
 }

@@ -38,6 +38,9 @@ func init() {
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
 
+	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
+	parallelStepCmd.Flags().String("network-name", "ethereum/mainnet", "Blockchain network (bsc/mainnet, ethereum/mainnet, ethereum/ropsten, ...) used as a causality region for the Proof of Indexing")
+
 	parallelCmd.AddCommand(parallelStepCmd)
 }
 
@@ -55,6 +58,8 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	entitiesPath := viper.GetString("parallel-step-cmd-entities-path")
 	storeSnapshot := viper.GetBool("parallel-step-cmd-store-snapshot")
 	debugCache := viper.GetBool("parallel-step-cmd-debug-cache")
+	networkName := viper.GetString("parallel-step-cmd-network-name")
+	enablePOI := viper.GetBool("parallel-step-cmd-enable-poi")
 
 	zlog.Info("fetching transactions for network",
 		zap.String("rpc_endpoint", rpcEndpoint),
@@ -68,6 +73,8 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		zap.Bool("flush_entities", flushEntities),
 		zap.Bool("store_snapshots", storeSnapshot),
 		zap.Bool("debug_cache", debugCache),
+		zap.String("network_name", networkName),
+		zap.Bool("enable_poi", enablePOI),
 	)
 
 	zlog.Info("creating rpc client")
@@ -120,6 +127,11 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		return squashableStore, nil
 	}
 
+	var indexerOpts []indexer.Option
+	if enablePOI {
+		indexerOpts = append(indexerOpts, indexer.WithPOI(networkName))
+	}
+
 	indexer := indexer.NewBatch(
 		step,
 		startBlock,
@@ -127,6 +139,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		rpcClient,
 		firehoseFactory,
 		subgraphDef,
+		indexerOpts...,
 	)
 
 	err = indexer.Start(sf)

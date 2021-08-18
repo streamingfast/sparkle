@@ -4,14 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"go.uber.org/zap"
-
 	"github.com/davecgh/go-spew/spew"
-
 	"github.com/streamingfast/dstore"
 	"github.com/streamingfast/sparkle/entity"
 	"github.com/streamingfast/sparkle/testgraph/testgraph"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestStore_SnapshotWriter(t *testing.T) {
