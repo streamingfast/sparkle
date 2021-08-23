@@ -153,9 +153,9 @@ func (i *TestIntrinsics) StepAbove(step int) bool {
 	return i.step > step
 }
 
-func (i *TestIntrinsics) GetTokenInfo(address eth.Address, validate subgraph.TokenValidator) (*eth.Token, bool) {
+func (i *TestIntrinsics) GetTokenInfo(address eth.Address) (*eth.Token) {
     tok := i.tokens[address.Pretty()]
-	return tok, validate(tok)
+	return tok
 }
 
 type TestCase struct {

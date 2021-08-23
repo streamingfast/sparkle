@@ -52,6 +52,7 @@ func init() {
 	indexCmd.Flags().String("schema-override", "", "Override schema")
 	indexCmd.Flags().String("pprof-listen-addr", ":6060", "If non-empty, the process will listen on this address for pprof analysis (see https://golang.org/pkg/net/http/pprof/)")
 	indexCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
+	indexCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls like GetTokenInfo() will be called on LATEST (breaks consistency and POI)")
 	RootCmd.AddCommand(indexCmd)
 }
 
@@ -71,6 +72,7 @@ func runIndex(cmd *cobra.Command, args []string) error {
 	dryRunOutput := viper.GetString("index-cmd-dry-run-output")
 	pprofListenAddr := viper.GetString("index-cmd-pprof-listen-addr")
 	enablePOI := viper.GetBool("index-cmd-enable-poi")
+	nonArchiveNode := viper.GetBool("index-cmd-non-archive-node")
 
 	if dryRun {
 		withReversible = false
@@ -89,6 +91,7 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		zap.Int64("dry_run_blocks", dryRunBlocks),
 		zap.String("dry_run_output", dryRunOutput),
 		zap.Bool("enable_poi", enablePOI),
+		zap.Bool("non_archive_node", nonArchiveNode),
 	)
 
 	versionedSubgraph, err := parseSubgraphVersionedName(subgraphVersionedName)
@@ -146,6 +149,10 @@ func runIndex(cmd *cobra.Command, args []string) error {
 
 	if enablePOI {
 		indexerOpts = append(indexerOpts, indexer.WithPOI(manifest.Network()))
+	}
+
+	if nonArchiveNode {
+		indexerOpts = append(indexerOpts, indexer.WithNonArchiveNode())
 	}
 
 	indexerInst := indexer.New(rpcClient, firehoseFactory, subgraphDef, indexerOpts...)

@@ -40,6 +40,7 @@ func init() {
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
 	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
+	parallelStepCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls like GetTokenInfo() will be called on LATEST (breaks consistency and POI)")
 
 	parallelCmd.AddCommand(parallelStepCmd)
 }
@@ -59,6 +60,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	storeSnapshot := viper.GetBool("parallel-step-cmd-store-snapshot")
 	debugCache := viper.GetBool("parallel-step-cmd-debug-cache")
 	enablePOI := viper.GetBool("parallel-step-cmd-enable-poi")
+	nonArchiveNode := viper.GetBool("parallel-step-cmd-non-archive-node")
 
 	zlog.Info("fetching transactions for network",
 		zap.String("rpc_endpoint", rpcEndpoint),
@@ -73,6 +75,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		zap.Bool("store_snapshots", storeSnapshot),
 		zap.Bool("debug_cache", debugCache),
 		zap.Bool("enable_poi", enablePOI),
+		zap.Bool("non_archive_node", nonArchiveNode),
 	)
 
 	zlog.Info("creating rpc client")
@@ -134,6 +137,10 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	var indexerOpts []indexer.Option
 	if enablePOI {
 		indexerOpts = append(indexerOpts, indexer.WithPOI(manifest.Network()))
+	}
+
+	if nonArchiveNode {
+		indexerOpts = append(indexerOpts, indexer.WithNonArchiveNode())
 	}
 
 	indexer := indexer.NewBatch(

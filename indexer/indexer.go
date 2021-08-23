@@ -59,6 +59,11 @@ func WithPOI(networkName string) Option {
 		i.networkName = networkName
 	})
 }
+func WithNonArchiveNode() Option {
+	return optionFunc(func(i *Indexer) {
+		i.nonArchiveNode = true
+	})
+}
 
 func UseTransactionalFlush() Option {
 	return optionFunc(func(i *Indexer) { i.useTransactionalFlush = true })
@@ -78,6 +83,7 @@ type Indexer struct {
 	stopBlock             uint64
 	useTransactionalFlush bool
 	withReversible        bool
+	nonArchiveNode        bool
 
 	stateLock      sync.RWMutex
 	subgraphStream *subgraphStream
@@ -156,6 +162,9 @@ func (i *Indexer) Start(makeStore StoreFactory) error {
 	/// read db to get the corresponing Qz.... iD
 	///
 
+	if i.nonArchiveNode {
+		intrinsics.nonArchiveNode = true
+	}
 	if i.enablePOI {
 		intrinsics.enablePOI = true
 		intrinsics.networkName = i.networkName

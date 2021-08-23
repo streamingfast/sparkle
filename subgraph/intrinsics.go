@@ -32,11 +32,9 @@ type Intrinsics interface {
 
 	/// JSON-RPC
 
-	// Will retry until either token is valid or RPC's HEAD block reached ours
-	GetTokenInfo(address eth.Address, f TokenValidator) (token *eth.Token, valid bool)
+	// Will retry until we get either a valid token or an empty token
+	GetTokenInfo(address eth.Address) (token *eth.Token)
 }
-
-type TokenValidator func(*eth.Token) bool
 
 type BlockRef interface {
 	ID() string

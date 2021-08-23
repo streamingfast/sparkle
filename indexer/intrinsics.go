@@ -36,9 +36,10 @@ type defaultIntrinsic struct {
 	rpcClient *rpc.Client
 	store     storage.Store
 
-	enablePOI    bool
-	aggregatePOI bool
-	networkName  string
+	enablePOI      bool
+	nonArchiveNode bool
+	aggregatePOI   bool
+	networkName    string
 
 	step int
 
@@ -177,35 +178,23 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 	return d.step > step
 }
 
-func (d *defaultIntrinsic) GetTokenInfo(address eth.Address, validate subgraph.TokenValidator) (out *eth.Token, valid bool) {
-	if validate == nil {
-		panic("you must give a validator to intrinsic GetTokenInfo")
-	}
+func (d *defaultIntrinsic) GetTokenInfo(address eth.Address) *eth.Token {
 
-	var sleep time.Duration
+	var delay time.Duration
 	for {
-		time.Sleep(sleep)
-		sleep = 500 * time.Millisecond
+		time.Sleep(delay)
+		delay = 500 * time.Millisecond
 
-		var headBlockNum uint64
-		var err error
-		out, headBlockNum, err = d.rpcClient.GetTokenInfo(address)
+		atBlockNum := d.blockRef.num
+		if d.nonArchiveNode {
+			atBlockNum = 0
+		}
+		out, err := d.rpcClient.GetTokenInfo(address, atBlockNum)
 		if err != nil {
 			zlog.Warn("retrying GetTokenInfo on RPC error", zap.Error(err), zap.Stringer("address", address))
 			continue
 		}
-
-		// with validator, we can exit early
-		if validate(out) {
-			return out, true
-		}
-
-		// we wait until RPC head block has reached ours+1, to be on the safe side
-		if headBlockNum < d.blockRef.num {
-			zlog.Info("retrying GetTokenInfo, waiting for RPC peer to be in sync", zap.Error(err), zap.Uint64("checked_head_block_num", headBlockNum), zap.Uint64("expected_head_block_num", d.blockRef.num))
-			continue
-		}
-		return out, false
+		return out
 	}
 }
 

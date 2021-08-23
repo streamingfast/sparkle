@@ -1,7 +1,6 @@
 package indexer
 
 import (
-	"github.com/streamingfast/eth-go"
 	"github.com/streamingfast/sparkle/entity"
 	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
 	"github.com/streamingfast/sparkle/subgraph"
@@ -31,10 +30,6 @@ func (t TestIntrinsics) StepBelow(step int) bool {
 }
 
 func (t TestIntrinsics) StepAbove(step int) bool {
-	panic("implement me")
-}
-
-func (t TestIntrinsics) GetTokenInfo(address eth.Address, _ subgraph.TokenValidator) (*eth.Token, error) {
 	panic("implement me")
 }
 
