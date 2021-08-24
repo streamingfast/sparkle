@@ -179,11 +179,13 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 }
 
 func (d *defaultIntrinsic) GetTokenInfo(address eth.Address) *eth.Token {
-
 	var delay time.Duration
+	var attemptNumber int
 	for {
 		time.Sleep(delay)
-		delay = 500 * time.Millisecond
+
+		attemptNumber += 1
+		delay = minDuration(time.Duration(attemptNumber*500)*time.Millisecond, 10*time.Second)
 
 		atBlockNum := d.blockRef.num
 		if d.nonArchiveNode {
@@ -191,11 +193,18 @@ func (d *defaultIntrinsic) GetTokenInfo(address eth.Address) *eth.Token {
 		}
 		out, err := d.rpcClient.GetTokenInfo(address, atBlockNum)
 		if err != nil {
-			zlog.Warn("retrying GetTokenInfo on RPC error", zap.Error(err), zap.Stringer("address", address))
+			zlog.Warn("retrying GetTokenInfo on RPC error", zap.Error(err), zap.Uint64("at_block", atBlockNum), zap.Stringer("address", address))
 			continue
 		}
 		return out
 	}
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a <= b {
+		return a
+	}
+	return b
 }
 
 func (d *defaultIntrinsic) setStep(step int) {
