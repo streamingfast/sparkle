@@ -40,7 +40,7 @@ func init() {
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
 	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
-	parallelStepCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls like GetTokenInfo() will be called on LATEST (breaks consistency and POI)")
+	parallelStepCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls will be called on LATEST (breaks consistency and POI)")
 
 	parallelCmd.AddCommand(parallelStepCmd)
 }

@@ -3,7 +3,6 @@ package subgraph
 import (
 	"time"
 
-	"github.com/streamingfast/eth-go"
 	"github.com/streamingfast/sparkle/entity"
 )
 
@@ -31,13 +30,23 @@ type Intrinsics interface {
 	StepAbove(step int) bool
 
 	/// JSON-RPC
-
-	// Will retry until we get either a valid token or an empty token
-	GetTokenInfo(address eth.Address) (token *eth.Token)
+	RPC(calls []*RPCCall) ([]*RPCResponse, error)
 }
 
 type BlockRef interface {
 	ID() string
 	Number() uint64
 	Timestamp() time.Time
+}
+
+type RPCCall struct {
+	ToAddr          string
+	MethodSignature string // ex: "name() (string)"
+}
+
+type RPCResponse struct {
+	Decoded       []interface{}
+	Raw           string
+	DecodingError error
+	CallError     error
 }

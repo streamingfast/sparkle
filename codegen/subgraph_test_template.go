@@ -1,12 +1,6 @@
 package codegen
 
 var templateSubgraphTest = `
-var defaultTestTokens = map[string]*eth.Token{
-	"0x00": {Address: []byte{0}, Name: "token.0.name", Symbol: "token.0.symbol", Decimals: 0, TotalSupply: big.NewInt(1000)},
-	"0x01": {Address: []byte{1}, Name: "token.1.name", Symbol: "token.1.symbol", Decimals: 10, TotalSupply: big.NewInt(10000)},
-	"0x02": {Address: []byte{2}, Name: "token.2.name", Symbol: "token.2.symbol", Decimals: 18, TotalSupply: big.NewInt(100000)},
-}
-
 func NewTestSubgraph(int subgraph.Intrinsics) *Subgraph {
 	return &Subgraph{
 		Base: subgraph.Base{
@@ -23,14 +17,12 @@ func NewTestSubgraph(int subgraph.Intrinsics) *Subgraph {
 }
 
 type TestIntrinsics struct {
-	tokens map[string]*eth.Token
 	store  map[string]map[string]entity.Interface
 	step   int
 }
 
 func NewTestIntrinsics(testCase *TestCase) *TestIntrinsics {
 	i := &TestIntrinsics{
-		tokens: make(map[string]*eth.Token),
 		store:  make(map[string]map[string]entity.Interface),
 		step:   99999,
 	}
@@ -44,7 +36,6 @@ func NewTestIntrinsics(testCase *TestCase) *TestIntrinsics {
 
 func (i *TestIntrinsics) initialize(testCase *TestCase) {
 	i.setStoreData(testCase.StoreData)
-	i.setTokens(testCase.Tokens)
 }
 
 func (i *TestIntrinsics) setStoreData(ents []*TypedEntity) {
@@ -53,24 +44,6 @@ func (i *TestIntrinsics) setStoreData(ents []*TypedEntity) {
 		if err != nil {
 			panic(err)
 		}
-	}
-}
-
-func (i *TestIntrinsics) setTokens(tokens []*TokenInfo) {
-	if len(tokens) == 0 {
-		i.tokens = defaultTestTokens
-		return
-	}
-
-	for _, tokenInfo := range tokens {
-		token := &eth.Token{
-			Name:        tokenInfo.Name,
-			Symbol:      tokenInfo.Symbol,
-			Address:     []byte{byte(tokenInfo.Address)},
-			Decimals:    uint(tokenInfo.Decimals),
-			TotalSupply: big.NewInt(int64(tokenInfo.TotalSupply)),
-		}
-		i.tokens[token.Address.Pretty()] = token
 	}
 }
 
@@ -153,23 +126,13 @@ func (i *TestIntrinsics) StepAbove(step int) bool {
 	return i.step > step
 }
 
-func (i *TestIntrinsics) GetTokenInfo(address eth.Address) (*eth.Token) {
-    tok := i.tokens[address.Pretty()]
-	return tok
+func (i *TestIntrinsics) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCResponse, error) {
+    return nil, nil
 }
 
 type TestCase struct {
 	StoreData []*TypedEntity         ` + "`" + `yaml:"storeData" json:"storeData"` + "`" + `
-	Tokens    []*TokenInfo           ` + "`" + `yaml:"tokens" json:"tokens"` + "`" + `
 	Events    []*TypedEvent          ` + "`" + `yaml:"events" json:"events"` + "`" + `
-}
-
-type TokenInfo struct {
-	Address     int    ` + "`" + `yaml:"address" json:"address"` + "`" + `
-	Name        string ` + "`" + `yaml:"name" json:"name"` + "`" + `
-	Symbol      string ` + "`" + `yaml:"symbol" json:"symbol"` + "`" + `
-	Decimals    int    ` + "`" + `yaml:"decimals" json:"decimals"` + "`" + `
-	TotalSupply int    ` + "`" + `yaml:"total_supply" json:"total_supply"` + "`" + `
 }
 
 type TypedEntity struct {

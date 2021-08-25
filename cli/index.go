@@ -52,7 +52,7 @@ func init() {
 	indexCmd.Flags().String("schema-override", "", "Override schema")
 	indexCmd.Flags().String("pprof-listen-addr", ":6060", "If non-empty, the process will listen on this address for pprof analysis (see https://golang.org/pkg/net/http/pprof/)")
 	indexCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
-	indexCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls like GetTokenInfo() will be called on LATEST (breaks consistency and POI)")
+	indexCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls will be called on LATEST (breaks consistency and POI)")
 	RootCmd.AddCommand(indexCmd)
 }
 

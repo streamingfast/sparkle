@@ -178,7 +178,27 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 	return d.step > step
 }
 
-func (d *defaultIntrinsic) GetTokenInfo(address eth.Address) *eth.Token {
+// RPCCalls retries eternally until it gets deterministic results / errors... Good luck!
+func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCResponse, error) {
+
+	opts := []rpc.ETHCallOption{}
+	if !d.nonArchiveNode {
+		opts = append(opts, rpc.AtBlockNum(d.blockRef.num))
+	}
+
+	var reqs []*rpc.RPCRequest
+	for _, call := range calls {
+		method, err := eth.NewMethodDef(call.MethodSignature)
+		if err != nil {
+			return nil, fmt.Errorf("invalid method signature %s: %w", call.MethodSignature, err)
+		}
+		addr, err := eth.NewAddress(call.ToAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid address %s: %w", call.ToAddr, err)
+		}
+		reqs = append(reqs, rpc.NewETHCall(addr, method, opts...).ToRequest())
+	}
+
 	var delay time.Duration
 	var attemptNumber int
 	for {
@@ -187,17 +207,26 @@ func (d *defaultIntrinsic) GetTokenInfo(address eth.Address) *eth.Token {
 		attemptNumber += 1
 		delay = minDuration(time.Duration(attemptNumber*500)*time.Millisecond, 10*time.Second)
 
-		atBlockNum := d.blockRef.num
-		if d.nonArchiveNode {
-			atBlockNum = 0
-		}
-		out, err := d.rpcClient.GetTokenInfo(address, atBlockNum)
+		out, err := d.rpcClient.DoRequests(reqs)
 		if err != nil {
-			zlog.Warn("retrying GetTokenInfo on RPC error", zap.Error(err), zap.Uint64("at_block", atBlockNum), zap.Stringer("address", address))
+			zlog.Warn("retrying RPCCall on RPC error", zap.Error(err), zap.Uint64("at_block", d.blockRef.num))
 			continue
 		}
-		return out
+		return toSubgraphRPCResponse(out), nil
 	}
+}
+
+func toSubgraphRPCResponse(in []*rpc.RPCResponse) (out []*subgraph.RPCResponse) {
+	for _, rpcResp := range in {
+		decoded, decodingError := rpcResp.Decode()
+		out = append(out, &subgraph.RPCResponse{
+			Decoded:       decoded,
+			DecodingError: decodingError,
+			CallError:     rpcResp.Err,
+			Raw:           rpcResp.Content,
+		})
+	}
+	return
 }
 
 func minDuration(a, b time.Duration) time.Duration {
