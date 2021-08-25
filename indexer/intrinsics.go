@@ -178,9 +178,10 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 	return d.step > step
 }
 
-// RPCCalls retries eternally until it gets deterministic results / errors... Good luck!
+// RPCCalls retries eternally until it gets deterministic results / errors...
+// However, it will return an error if your input calls cannot be encoded.
+// Good luck!
 func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCResponse, error) {
-
 	opts := []rpc.ETHCallOption{}
 	if !d.nonArchiveNode {
 		opts = append(opts, rpc.AtBlockNum(d.blockRef.num))
@@ -211,6 +212,13 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 		if err != nil {
 			zlog.Warn("retrying RPCCall on RPC error", zap.Error(err), zap.Uint64("at_block", d.blockRef.num))
 			continue
+		}
+
+		for _, resp := range out {
+			if !resp.Deterministic() {
+				zlog.Warn("retrying RPCCall on non-deterministic RPC call error", zap.Error(resp.Err), zap.Uint64("at_block", d.blockRef.num))
+				continue
+			}
 		}
 		return toSubgraphRPCResponse(out), nil
 	}

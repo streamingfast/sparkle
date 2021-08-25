@@ -48,5 +48,5 @@ type RPCResponse struct {
 	Decoded       []interface{}
 	Raw           string
 	DecodingError error
-	CallError     error
+	CallError     error // always deterministic
 }
