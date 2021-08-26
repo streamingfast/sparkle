@@ -29,11 +29,12 @@ func DeploySubgraph(ctx context.Context, db *sqlx.DB, subgraphDef *subgraph.Defi
 	}
 
 	zlog.Info("uploading maniest to IPFS")
-	ipfsHash, err := ipfsNode.UploadManifest(subgraphDef)
+	ipfsHash, uploadedHashes, err := ipfsNode.UploadManifest(subgraphDef)
 	if err != nil {
 		return fmt.Errorf("uploading to ipfs: %w", err)
 	}
 	deployemntId := ipfsHash
+	zlog.Info("hashes uploaded to IPFS (must be PINNED manually!)", zap.Strings("uploaded_hashes", uploadedHashes))
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

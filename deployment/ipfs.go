@@ -75,17 +75,19 @@ func (ipfs *IPFSNode) add(fileContent []byte) (*IPFSAddResponse, error) {
 	}, nil
 }
 
-func (ipfs *IPFSNode) UploadManifest(subgraphDef *subgraph.Definition) (string, error) {
+func (ipfs *IPFSNode) UploadManifest(subgraphDef *subgraph.Definition) (string, []string, error) {
+	var uploadedHashes []string
 	manifest, err := manifestlib.DecodeYamlManifest(subgraphDef.Manifest)
 	if err != nil {
-		return "", fmt.Errorf("unable to decode manfiest: %w", err)
+		return "", uploadedHashes, fmt.Errorf("unable to decode manfiest: %w", err)
 	}
 	//upload schema
 	if manifest.Schema.File.IsLocalFile {
 		addResponse, err := ipfs.add([]byte(subgraphDef.GraphQLSchema))
 		if err != nil {
-			return "", err
+			return "", uploadedHashes, err
 		}
+		uploadedHashes = append(uploadedHashes, addResponse.Hash)
 
 		manifest.Schema.File = &manifestlib.Link{
 			IsLocalFile: false,
@@ -98,13 +100,14 @@ func (ipfs *IPFSNode) UploadManifest(subgraphDef *subgraph.Definition) (string, 
 		for j, abi := range datasource.Mapping.Abis {
 			abiCnt, found := subgraphDef.Abis[abi.Name]
 			if !found {
-				return "", fmt.Errorf("manifest specfied abi %q is not loaded in the generate code", abi.Name)
+				return "", uploadedHashes, fmt.Errorf("manifest specfied abi %q is not loaded in the generate code", abi.Name)
 			}
 
 			addResponse, err := ipfs.add([]byte(abiCnt))
 			if err != nil {
-				return "", err
+				return "", uploadedHashes, err
 			}
+			uploadedHashes = append(uploadedHashes, addResponse.Hash)
 
 			manifest.DataSources[i].Mapping.Abis[j].File = &manifestlib.Link{
 				IsLocalFile: false,
@@ -118,13 +121,14 @@ func (ipfs *IPFSNode) UploadManifest(subgraphDef *subgraph.Definition) (string, 
 		for j, abi := range template.Mapping.Abis {
 			abiCnt, found := subgraphDef.Abis[abi.Name]
 			if !found {
-				return "", fmt.Errorf("manifest specfied abi %q is not loaded in the generate code", abi.Name)
+				return "", uploadedHashes, fmt.Errorf("manifest specfied abi %q is not loaded in the generate code", abi.Name)
 			}
 
 			addResponse, err := ipfs.add([]byte(abiCnt))
 			if err != nil {
-				return "", err
+				return "", uploadedHashes, err
 			}
+			uploadedHashes = append(uploadedHashes, addResponse.Hash)
 
 			manifest.Templates[i].Mapping.Abis[j].File = &manifestlib.Link{
 				IsLocalFile: false,
@@ -136,15 +140,16 @@ func (ipfs *IPFSNode) UploadManifest(subgraphDef *subgraph.Definition) (string, 
 	compiledManifest := bytes.NewBuffer(nil)
 	err = yaml.NewEncoder(compiledManifest).Encode(manifest)
 	if err != nil {
-		return "", fmt.Errorf("compiling manifest: %w", err)
+		return "", uploadedHashes, fmt.Errorf("compiling manifest: %w", err)
 	}
 
 	compiledManifestResponse, err := ipfs.add(compiledManifest.Bytes())
 	if err != nil {
-		return "", fmt.Errorf("uploading compiled manifest: %w", err)
+		return "", uploadedHashes, fmt.Errorf("uploading compiled manifest: %w", err)
 	}
+	uploadedHashes = append(uploadedHashes, compiledManifestResponse.Hash)
 
-	return compiledManifestResponse.Hash, nil
+	return compiledManifestResponse.Hash, uploadedHashes, nil
 }
 
 func mustGetAbsoluteFileFromRelative(referenceFilePath, relativeFilePath string) string {
