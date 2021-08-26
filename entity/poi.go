@@ -39,7 +39,7 @@ func (p *POI) Clear() {
 }
 
 func (p *POI) IsFinal(_ uint64, _ time.Time) bool {
-	return true
+	return false
 }
 
 func (p *POI) RemoveEnt(entityType, entityId string) error {
