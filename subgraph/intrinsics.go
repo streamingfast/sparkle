@@ -1,6 +1,7 @@
 package subgraph
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/streamingfast/sparkle/entity"
@@ -42,6 +43,10 @@ type BlockRef interface {
 type RPCCall struct {
 	ToAddr          string
 	MethodSignature string // ex: "name() (string)"
+}
+
+func (c *RPCCall) ToString() string {
+	return fmt.Sprintf("%s:%s", c.ToAddr, c.MethodSignature)
 }
 
 type RPCResponse struct {

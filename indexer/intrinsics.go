@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -41,6 +42,7 @@ type defaultIntrinsic struct {
 
 	enablePOI      bool
 	nonArchiveNode bool
+	rpcCache       *RPCCache
 	aggregatePOI   bool
 	networkName    string
 
@@ -185,9 +187,32 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 // However, it will return an error if your input calls cannot be encoded.
 // Good luck!
 func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCResponse, error) {
+
 	opts := []rpc.ETHCallOption{}
 	if !d.nonArchiveNode {
 		opts = append(opts, rpc.AtBlockNum(d.blockRef.num))
+	}
+
+	var cacheKey RPCCacheKey
+	if d.rpcCache != nil {
+		var cacheKeyParts []interface{}
+		if !d.nonArchiveNode {
+			cacheKeyParts = append(cacheKeyParts, d.blockRef.num)
+		}
+		for _, call := range calls {
+			cacheKeyParts = append(cacheKeyParts, call.ToString())
+		}
+		cacheKey = d.rpcCache.Key("rpc", cacheKeyParts...)
+
+		if respJSON, found := d.rpcCache.GetJSON(cacheKey); found {
+			resp := []*subgraph.RPCResponse{}
+			err := json.Unmarshal(respJSON, &resp)
+			if err != nil {
+				zlog.Warn("cannot unmarshal cache response for rpc call", zap.Error(err))
+			} else {
+				return resp, nil
+			}
+		}
 	}
 
 	var reqs []*rpc.RPCRequest
@@ -223,7 +248,11 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 				continue
 			}
 		}
-		return toSubgraphRPCResponse(out), nil
+		resp := toSubgraphRPCResponse(out)
+		if d.rpcCache != nil {
+			d.rpcCache.Set(cacheKey, resp)
+		}
+		return resp, nil
 	}
 }
 
