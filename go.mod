@@ -37,7 +37,6 @@ require (
 	github.com/streamingfast/shutter v1.5.0
 	github.com/stretchr/testify v1.7.1-0.20210427113832-6241f9ab9942
 	github.com/test-go/testify v1.1.4
-	github.com/ugorji/go/codec v1.2.6
 	github.com/vektah/gqlparser v1.3.1
 	go.uber.org/zap v1.17.0
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
