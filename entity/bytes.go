@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
+	"strings"
 )
 
 type Bytes []byte
@@ -25,11 +26,11 @@ func (b *Bytes) Scan(value interface{}) error {
 }
 
 func (b Bytes) MarshalCSV() ([]byte, error) {
-	return []byte(hex.EncodeToString(b)), nil
+	return []byte(fmt.Sprintf("\\x%s", hex.EncodeToString(b))), nil
 }
 
 func (b *Bytes) UnmarshalCSV(hexStr []byte) error {
-	d, err := hex.DecodeString(string(hexStr))
+	d, err := hex.DecodeString(strings.TrimPrefix(string(hexStr), "\\x"))
 	if err != nil {
 		return fmt.Errorf("failed to hex decode BYTES: %w", err)
 	}

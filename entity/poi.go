@@ -8,22 +8,17 @@ import (
 	"time"
 
 	"github.com/jszwec/csvutil"
-
-	"github.com/ugorji/go/codec"
 )
 
 type POI struct {
 	Base
-	Digest  Bytes `db:"digest" csv:"digest"`
-	handler *codec.MsgpackHandle
-	md5     hash.Hash
+	Digest Bytes `db:"digest" csv:"digest"`
+	md5    hash.Hash
 }
 
 func (p *POI) TableName() string {
 	return "poi2$"
 }
-
-var poiDefaultHandler = new(codec.MsgpackHandle)
 
 func NewPOI(causalityRegion string) *POI {
 	return &POI{
