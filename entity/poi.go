@@ -59,7 +59,7 @@ func (p *POI) AddEnt(entityType string, ent interface{}) error {
 
 	csvWriter := csv.NewWriter(p.md5)
 	enc := csvutil.NewEncoder(csvWriter)
-	enc.Tag = "csv"
+	enc.Tag = "poi"
 	enc.AutoHeader = false
 	if err := enc.Encode(ent); err != nil {
 		return fmt.Errorf("unable to encode serialized entity: %w", err)

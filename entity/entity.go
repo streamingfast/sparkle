@@ -1,13 +1,13 @@
 package entity
 
 type Base struct {
-	ID              string      `db:"id" csv:"id"`           // text key
-	VID             uint64      `db:"vid" csv:"-" codec:"-"` // version
+	ID              string      `db:"id" csv:"id"`         // text key
+	VID             uint64      `db:"vid" csv:"-" poi:"-"` // version
 	BlockRange      *BlockRange `db:"block_range" csv:"block_range"`
-	UpdatedBlockNum uint64      `db:"_updated_block_number" csv:"updated_block_number" codec:"-"`
+	UpdatedBlockNum uint64      `db:"_updated_block_number" csv:"updated_block_number" poi:"-"`
 	exists          bool
 
-	MutatedOnStep int `db:"-" csv:"-" codec:"-"`
+	MutatedOnStep int `db:"-" csv:"-" poi:"-"`
 }
 
 func NewBase(id string) Base {

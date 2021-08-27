@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"time"
@@ -16,6 +17,8 @@ import (
 	"github.com/streamingfast/sparkle/subgraph"
 	"go.uber.org/zap"
 )
+
+var debugPOI = os.Getenv("DEBUG_POI") == "true"
 
 type privateIntrinsic interface {
 	subgraph.Intrinsics
@@ -279,7 +282,9 @@ func (d *defaultIntrinsic) generatePOI() (*entity.POI, error) {
 		Id:  d.block.ID(),
 		Num: d.block.Number,
 	}
-	zlog.Info("generating POI", zap.Reflect("block", blk))
+	if debugPOI {
+		zlog.Info("generating POI", zap.Reflect("block", blk), zap.Reflect("updates", d.updates))
+	}
 	poi := entity.NewPOI(d.networkName)
 	if err := d.Load(poi); err != nil {
 		return nil, err

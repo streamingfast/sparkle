@@ -71,7 +71,7 @@ func TestPOI(t *testing.T) {
 	})
 	require.NoError(t, err)
 	digest := hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "2479d5bb22d6648b56cda5e5d461bf85", digest)
+	assert.Equal(t, "5c8640a7d2fc2f7ddb4904e7960db200", digest)
 
 	updates["accounts"] = map[string]entity.Interface{
 		"one": testgraph.NewTestEntity("1"),
@@ -86,7 +86,7 @@ func TestPOI(t *testing.T) {
 	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "8289d942b6b23399fc27555585ce619f", digest)
+	assert.Equal(t, "c09b86043fc1501291b9c3121b12fd05", digest)
 
 	poi.Clear()
 	err = computePOI(poi, updates, &Blk{
@@ -95,7 +95,7 @@ func TestPOI(t *testing.T) {
 	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "0566a532606d0387bc069bd9128b90d7", digest)
+	assert.Equal(t, "89970ca83c62ce227f75ba4ebd14fe8a", digest)
 
 	// with blockref
 	poi.Clear()
@@ -105,6 +105,6 @@ func TestPOI(t *testing.T) {
 	})
 	require.NoError(t, err)
 	digest = hex.EncodeToString(poi.Digest)
-	assert.Equal(t, "08207c821d70a46918431e7f5d1872d6", digest)
+	assert.Equal(t, "cb2524122d504f4248591d3565fc8d9b", digest)
 
 }
