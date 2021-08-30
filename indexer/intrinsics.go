@@ -204,7 +204,7 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 		}
 		cacheKey = d.rpcCache.Key("rpc", cacheKeyParts...)
 
-		if respJSON, found := d.rpcCache.GetJSON(cacheKey); found {
+		if respJSON, found := d.rpcCache.GetRaw(cacheKey); found {
 			resp := []*subgraph.RPCResponse{}
 			err := json.Unmarshal(respJSON, &resp)
 			if err != nil {

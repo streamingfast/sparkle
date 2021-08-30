@@ -15,14 +15,14 @@ type RPCCache struct {
 	fileName   string
 	readStore  dstore.Store
 	writeStore dstore.Store
-	kv         map[RPCCacheKey]json.RawMessage
+	kv         map[RPCCacheKey][]byte
 }
 
 type RPCCacheKey string
 
 func NewCache(readStore, writeStore dstore.Store, startBlockNum, endBlockNum uint64) *RPCCache {
 	return &RPCCache{
-		kv:         make(map[RPCCacheKey]json.RawMessage),
+		kv:         make(map[RPCCacheKey][]byte),
 		fileName:   cacheFileName(startBlockNum, endBlockNum),
 		readStore:  readStore,
 		writeStore: writeStore,
@@ -50,7 +50,7 @@ func (c *RPCCache) Load(ctx context.Context) {
 		return
 	}
 
-	kv := make(map[RPCCacheKey]json.RawMessage)
+	kv := make(map[RPCCacheKey][]byte)
 	err = json.Unmarshal(b, &kv)
 	if err != nil {
 		zlog.Info("cannot unmarshal rpc cache", zap.String("filename", c.fileName), zap.String("read_store_url", c.readStore.BaseURL().Redacted()), zap.Error(err))
@@ -94,8 +94,7 @@ func (c *RPCCache) Set(k RPCCacheKey, v interface{}) {
 	}
 	c.kv[k] = b
 }
-
-func (c *RPCCache) GetJSON(k RPCCacheKey) (v json.RawMessage, found bool) {
+func (c *RPCCache) GetRaw(k RPCCacheKey) (v []byte, found bool) {
 	v, found = c.kv[k]
 	return
 }

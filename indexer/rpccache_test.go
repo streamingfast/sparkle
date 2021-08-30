@@ -2,7 +2,8 @@ package indexer
 
 import (
 	"context"
-	"encoding/json"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/streamingfast/dstore"
@@ -10,67 +11,137 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRpcCache(t *testing.T) {
+func TestRpcCacheNewLoadSave(t *testing.T) {
+	dir, err := ioutil.TempDir("", "sparkle_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	writeStore, err := dstore.NewStore(dir, "json.zst", "zstd", true)
+	require.NoError(t, err)
+
 	ctx := context.Background()
+	wc := NewCache(nil, writeStore, 1000, 11000)
 
-	readStore, err := dstore.NewStore("file:///tmp/testrpcread", "json.zst", "zstd", false)
-	require.NoError(t, err)
-	writeStore, err := dstore.NewStore("file:///tmp/testrpcwrite", "json.zst", "zstd", true)
+	wc.kv = map[RPCCacheKey][]byte{
+		"foo": []byte(`bar`),
+		"bar": []byte(`foo`),
+	}
+	wc.Save(ctx)
+
+	readStore, err := dstore.NewStore(dir, "json.zst", "zstd", false)
 	require.NoError(t, err)
 
-	c := NewCache(readStore, writeStore, 1000, 11000)
-	c.Load(ctx)
+	rc := NewCache(readStore, nil, 1000, 11000)
+	rc.Load(ctx)
+
+	assert.Equal(t, map[RPCCacheKey][]byte{
+		"foo": []byte(`bar`),
+		"bar": []byte(`foo`),
+	}, rc.kv)
+}
+
+func TestRpcCacheKey(t *testing.T) {
+	c := &RPCCache{}
 	k := c.Key("testtype", 234, "something", "blah:\nblah")
 	assert.Equal(t, k, RPCCacheKey("testtype:234:something:blah:\nblah"))
+}
 
-	ent := &fakeEntity{
-		A: "a",
-		B: 2,
-		C: "c",
+func TestRpcCacheSet(t *testing.T) {
+	var cases = []struct {
+		name   string
+		in     interface{}
+		expect []byte
+	}{
+		{
+			name:   "simple entity",
+			in:     &fakeEntity{"a", 2, "c"},
+			expect: []byte(`{"A":"a","B":2,"C":"c"}`),
+		},
+		{
+			name: "slice of entities",
+			in: []*fakeEntity{
+				{"aa", 22, "cc"},
+				{"aaa", 222, "ccc"},
+			},
+			expect: []byte(`[{"A":"aa","B":22,"C":"cc"},{"A":"aaa","B":222,"C":"ccc"}]`),
+		},
 	}
-	c.Set(k, ent)
 
-	loadedJSON, found := c.GetJSON(k)
-	assert.True(t, found)
-
-	loaded := &fakeEntity{}
-	assert.NotEqual(t, loaded, ent)
-	err = json.Unmarshal(loadedJSON, &loaded)
-	require.NoError(t, err)
-	assert.Equal(t, loaded, ent)
-
-	loadedDirect := &fakeEntity{}
-	found = c.Get(k, loadedDirect)
-	assert.Equal(t, loadedDirect, ent)
-
-	unloadable := &struct {
-		A int
-	}{}
-	found = c.Get(k, unloadable)
-	assert.False(t, found)
-
-	wrongKey := c.Key("wrong", 123)
-	_, found = c.GetJSON(wrongKey)
-	assert.False(t, found)
-
-	// slice
-	ents := []*fakeEntity{
-		{"aa", 22, "cc"},
-		{"aaa", 222, "ccc"},
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cache := NewCache(nil, nil, 0, 0)
+			cache.Set("foo", c.in)
+			assert.Equal(t, c.expect, cache.kv["foo"])
+		})
 	}
-	c.Set(k, ents)
+}
 
-	loadedEnts := []*fakeEntity{}
-	loadedEntsJSON, found := c.GetJSON(k)
-	assert.True(t, found)
+func TestRpcCacheGet(t *testing.T) {
+	var cases = []struct {
+		name      string
+		kv        map[RPCCacheKey][]byte
+		expect    interface{}
+		intoSlice bool
+		expectOK  bool
+	}{
+		{
+			name:     "simple entity",
+			kv:       map[RPCCacheKey][]byte{"foo": []byte(`{"A":"a","B":2,"C":"c"}`)},
+			expect:   &fakeEntity{"a", 2, "c"},
+			expectOK: true,
+		},
+		{
+			name:      "slice of entities",
+			kv:        map[RPCCacheKey][]byte{"foo": []byte(`[{"A":"aa","B":22,"C":"cc"},{"A":"aaa","B":222,"C":"ccc"}]`)},
+			intoSlice: true,
+			expect:    []*fakeEntity{{"aa", 22, "cc"}, {"aaa", 222, "ccc"}},
+			expectOK:  true,
+		},
+		{
+			name:     "invalid",
+			kv:       map[RPCCacheKey][]byte{"foo": []byte(`}{`)},
+			expectOK: false,
+		},
+		{
+			name:      "notslice into slice is invalid",
+			kv:        map[RPCCacheKey][]byte{"foo": []byte(`{"A":"a","B":2,"C":"c"}`)},
+			intoSlice: true,
+			expectOK:  false,
+		},
+		{
+			name:     "not found",
+			kv:       map[RPCCacheKey][]byte{"wrongkey": []byte(`{}`)},
+			expectOK: false,
+		},
+	}
 
-	err = json.Unmarshal(loadedEntsJSON, &loadedEnts)
-	require.NoError(t, err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cache := NewCache(nil, nil, 0, 0)
+			cache.kv = c.kv
 
-	assert.Equal(t, loadedEnts, ents)
+			var ok bool
+			var out interface{}
 
-	c.Save(context.Background())
+			if c.intoSlice {
+				outEnt := []*fakeEntity{}
+				ok = cache.Get("foo", &outEnt)
+				out = outEnt
+			} else {
+				outEnt := &fakeEntity{}
+				ok = cache.Get("foo", &outEnt)
+				out = outEnt
+			}
 
+			if c.expectOK {
+				assert.Equal(t, c.expect, out)
+				assert.True(t, ok)
+			} else {
+				assert.False(t, ok)
+			}
+
+		})
+	}
 }
 
 type fakeEntity struct {
