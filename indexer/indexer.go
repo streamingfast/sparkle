@@ -48,6 +48,12 @@ func StopBlock(stopBlock uint64) Option {
 	})
 }
 
+func WithRPCCache(cache *RPCCache) Option {
+	return optionFunc(func(i *Indexer) {
+		i.rpcCache = cache
+	})
+}
+
 func WithReversible() Option {
 	return optionFunc(func(i *Indexer) {
 		i.withReversible = true
@@ -84,6 +90,7 @@ type Indexer struct {
 	useTransactionalFlush bool
 	withReversible        bool
 	nonArchiveNode        bool
+	rpcCache              *RPCCache
 
 	stateLock      sync.RWMutex
 	subgraphStream *subgraphStream
@@ -161,6 +168,10 @@ func (i *Indexer) Start(makeStore StoreFactory) error {
 	zlog.Info("intrinsics initiated")
 	/// read db to get the corresponing Qz.... iD
 	///
+
+	if i.rpcCache != nil {
+		intrinsics.rpcCache = i.rpcCache
+	}
 
 	if i.nonArchiveNode {
 		intrinsics.nonArchiveNode = true

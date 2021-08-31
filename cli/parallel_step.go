@@ -41,6 +41,8 @@ func init() {
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
 	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
 	parallelStepCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls will be called on LATEST (breaks consistency and POI)")
+	parallelStepCmd.Flags().String("rpc-cache-load-path", "", "If non-empty, will load and use rpc request/response cache from this path")
+	parallelStepCmd.Flags().String("rpc-cache-save-path", "", "If non-empty, will save rpc request/response cache to this path (can be the same as load-path to append data)")
 
 	parallelCmd.AddCommand(parallelStepCmd)
 }
@@ -56,6 +58,8 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	flushEntities := viper.GetBool("parallel-step-cmd-flush-entities")
 	outputPath := viper.GetString("parallel-cmd-output-path")
 	inputPath := viper.GetString("parallel-cmd-input-path")
+	rpcCacheLoadPath := viper.GetString("parallel-step-cmd-rpc-cache-load-path")
+	rpcCacheSavePath := viper.GetString("parallel-step-cmd-rpc-cache-save-path")
 	entitiesPath := viper.GetString("parallel-step-cmd-entities-path")
 	storeSnapshot := viper.GetBool("parallel-step-cmd-store-snapshot")
 	debugCache := viper.GetBool("parallel-step-cmd-debug-cache")
@@ -68,6 +72,8 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		zap.Uint64("stop_block", stopBlock),
 		zap.String("output_path", outputPath),
 		zap.String("input_path", inputPath),
+		zap.String("rpc_cache_load_path", rpcCacheLoadPath),
+		zap.String("rpc_cache_save_path", rpcCacheSavePath),
 		zap.String("entities_path", entitiesPath),
 		zap.String("blocks_store_url", blocksStoreURL),
 		zap.Int("step", step),
@@ -80,7 +86,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 
 	zlog.Info("creating rpc client")
 	rpcClient := rpc.NewClient(rpcEndpoint, rpc.WithHttpClient(&http.Client{
-		Timeout: 3 * time.Second,
+		Timeout: 10 * time.Second,
 	}))
 
 	var inputStore dstore.Store
@@ -131,7 +137,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	// TODO: this can be stored in the generated subgraph
 	manifest, err := manifestlib.DecodeYamlManifest(subgraphDef.Manifest)
 	if err != nil {
-		return fmt.Errorf("unable to decode manifest")
+		return fmt.Errorf("unable to decode manifest: %w", err)
 	}
 
 	var indexerOpts []indexer.Option
@@ -141,6 +147,27 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 
 	if nonArchiveNode {
 		indexerOpts = append(indexerOpts, indexer.WithNonArchiveNode())
+	}
+
+	var rpcCache *indexer.RPCCache
+	if rpcCacheLoadPath != "" || rpcCacheSavePath != "" {
+		var loadStore, saveStore dstore.Store
+		if rpcCacheSavePath != "" {
+			saveStore, err = dstore.NewStore(rpcCacheSavePath, "json.zst", "zstd", true)
+			if err != nil {
+				return fmt.Errorf("cannot open RPC Cache save store:%w", err)
+			}
+		}
+		if rpcCacheLoadPath != "" {
+			loadStore, err = dstore.NewStore(rpcCacheLoadPath, "json.zst", "zstd", false)
+			if err != nil {
+				return fmt.Errorf("cannot open RPC Cache load store:%w", err)
+			}
+		}
+		rpcCache = indexer.NewCache(loadStore, saveStore, startBlock, stopBlock)
+
+		rpcCache.Load(ctx)
+		indexerOpts = append(indexerOpts, indexer.WithRPCCache(rpcCache))
 	}
 
 	indexer := indexer.NewBatch(
@@ -188,6 +215,10 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
+	}
+	if rpcCache != nil {
+		zlog.Info("saving rpc cache", zap.String("rpc_cache_save_path", rpcCacheSavePath))
+		rpcCache.Save(ctx)
 	}
 
 	return nil

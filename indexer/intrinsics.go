@@ -193,28 +193,6 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 		opts = append(opts, rpc.AtBlockNum(d.blockRef.num))
 	}
 
-	var cacheKey RPCCacheKey
-	if d.rpcCache != nil {
-		var cacheKeyParts []interface{}
-		if !d.nonArchiveNode {
-			cacheKeyParts = append(cacheKeyParts, d.blockRef.num)
-		}
-		for _, call := range calls {
-			cacheKeyParts = append(cacheKeyParts, call.ToString())
-		}
-		cacheKey = d.rpcCache.Key("rpc", cacheKeyParts...)
-
-		if respJSON, found := d.rpcCache.GetRaw(cacheKey); found {
-			resp := []*subgraph.RPCResponse{}
-			err := json.Unmarshal(respJSON, &resp)
-			if err != nil {
-				zlog.Warn("cannot unmarshal cache response for rpc call", zap.Error(err))
-			} else {
-				return resp, nil
-			}
-		}
-	}
-
 	var reqs []*rpc.RPCRequest
 	for _, call := range calls {
 		method, err := eth.NewMethodDef(call.MethodSignature)
@@ -226,6 +204,32 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 			return nil, fmt.Errorf("invalid address %s: %w", call.ToAddr, err)
 		}
 		reqs = append(reqs, rpc.NewETHCall(addr, method, opts...).ToRequest())
+	}
+
+	var cacheKey RPCCacheKey
+	if d.rpcCache != nil {
+		var cacheKeyParts []interface{}
+		if !d.nonArchiveNode {
+			cacheKeyParts = append(cacheKeyParts, d.blockRef.num)
+		}
+		for _, call := range calls {
+			cacheKeyParts = append(cacheKeyParts, call.ToString())
+		}
+		cacheKey = d.rpcCache.Key("rpc", cacheKeyParts...)
+
+		if fromCache, found := d.rpcCache.GetRaw(cacheKey); found {
+			rpcResp := []*rpc.RPCResponse{}
+			err := json.Unmarshal(fromCache, &rpcResp)
+			if err != nil {
+				zlog.Warn("cannot unmarshal cache response for rpc call", zap.Error(err))
+			} else {
+				for i, resp := range rpcResp {
+					resp.CopyDecoder(reqs[i])
+				}
+				resps := toSubgraphRPCResponse(rpcResp)
+				return resps, nil
+			}
+		}
 	}
 
 	var delay time.Duration
@@ -248,10 +252,10 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 				continue
 			}
 		}
-		resp := toSubgraphRPCResponse(out)
 		if d.rpcCache != nil {
-			d.rpcCache.Set(cacheKey, resp)
+			d.rpcCache.Set(cacheKey, out)
 		}
+		resp := toSubgraphRPCResponse(out)
 		return resp, nil
 	}
 }
