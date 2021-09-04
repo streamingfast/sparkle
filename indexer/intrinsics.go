@@ -183,6 +183,10 @@ func (d *defaultIntrinsic) StepAbove(step int) bool {
 	return d.step > step
 }
 
+func (d *defaultIntrinsic) Step() int {
+	return d.step
+}
+
 // RPCCalls retries eternally until it gets deterministic results / errors...
 // However, it will return an error if your input calls cannot be encoded.
 // Good luck!

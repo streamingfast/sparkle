@@ -26,7 +26,7 @@ type Intrinsics interface {
 	Block() BlockRef
 
 	/// Reproc
-
+	Step() int
 	StepBelow(step int) bool
 	StepAbove(step int) bool
 
