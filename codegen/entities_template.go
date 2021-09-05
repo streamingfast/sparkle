@@ -47,6 +47,8 @@ func (next *{{ $ent.Name }}) Merge(step int, cached *{{ $ent.Name }}) {
 		next.{{ $fieldName }} += cached.{{ $fieldName }}
 		{{- else if and (eq $pp.Field.GoType "float64") (eq $pp.Type "SUM") }}
 		next.{{ $fieldName }} += cached.{{ $fieldName }}
+		{{- else if and (eq $pp.Field.GoType "entity.LocalStringArray") (eq $pp.Type "SUM") }}
+		next.{{ $fieldName }} = entity.ArrayAdd(next.{{ $fieldName }}, cached.{{ $fieldName }})
 		{{- else }}
 		next.{{ $fieldName }} = cached.{{ $fieldName }}
 		{{- end }}

@@ -11,6 +11,27 @@ import (
 
 type LocalStringArray pq.StringArray
 
+func ArrayAdd(a, b LocalStringArray) LocalStringArray {
+	//TODO: optimize this?
+
+	m := make(map[string]struct{})
+	res := LocalStringArray{}
+
+	for _, s := range a {
+		m[s] = struct{}{}
+		res = append(res, s)
+	}
+
+	for _, t := range b {
+		if _, ok := m[t]; ok {
+			continue
+		}
+		res = append(res, t)
+	}
+
+	return res
+}
+
 // Scan implements the sql.Scanner interface.
 func (a *LocalStringArray) Scan(src interface{}) error {
 	switch src := src.(type) {
