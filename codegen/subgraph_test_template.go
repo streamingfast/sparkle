@@ -118,6 +118,10 @@ func (i *TestIntrinsics) Block() subgraph.BlockRef {
 	}
 }
 
+func (i *TestIntrinsics) Step() int {
+	return i.step
+}
+
 func (i *TestIntrinsics) StepBelow(step int) bool {
 	return i.step < step
 }
