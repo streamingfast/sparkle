@@ -162,6 +162,7 @@ func (s *store) WriteSnapshot(out dstore.Store) (string, error) {
 
 	filename := fmt.Sprintf("%010d-%010d.jsonl", s.startBlock, s.endBlock)
 
+	done := make(chan bool)
 	pr, pw := io.Pipe()
 	go func() {
 		defer cancel()
@@ -171,9 +172,14 @@ func (s *store) WriteSnapshot(out dstore.Store) (string, error) {
 				s.logger.Error("snapshot: closing pipe reader", zap.Error(err))
 			}
 		}
+		close(done)
 	}()
 	enc := json.NewEncoder(pw)
-	defer pw.Close()
+	defer func() {
+		pw.Close()
+		s.logger.Info("waiting for the pipe writer to close...")
+		<-done
+	}()
 
 	tableIdx := make(map[int]string)
 	tableRevIdx := make(map[string]int)
@@ -288,7 +294,6 @@ func (s *store) loadSnapshotFile(ctx context.Context, in dstore.Store, snapshots
 			return err
 		}
 		tableName := tableIdx[sr.TableIdx]
-		fmt.Println("getting type for ", tableName)
 		reflectType, ok := s.subgraph.Entities.GetType(tableName)
 		if !ok {
 			return fmt.Errorf("no entity registered for table name %q", tableName)
@@ -299,7 +304,6 @@ func (s *store) loadSnapshotFile(ctx context.Context, in dstore.Store, snapshots
 			s.cache[tableName] = cachedTable
 		}
 
-		fmt.Println("got new reflect with type", reflectType)
 		el := reflect.New(reflectType).Interface()
 		if err := json.Unmarshal(sr.Entity, el); err != nil {
 			return fmt.Errorf("unmarshal raw entity: %w", err)
