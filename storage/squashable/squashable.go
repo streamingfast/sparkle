@@ -1,7 +1,7 @@
 package squashable
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,6 +17,8 @@ import (
 	"github.com/streamingfast/sparkle/subgraph"
 	"go.uber.org/zap"
 )
+
+//	const ScannerMaxCapacity   = 655360
 
 type store struct {
 	ctx   context.Context
@@ -141,6 +143,11 @@ func (s *store) GetCache() map[string]map[string]entity.Interface {
 	return s.cache
 }
 
+type snapshotEntity struct {
+	TableIdx int              `json:"t"`
+	Entity   entity.Interface `json:"d"`
+}
+
 func (s *store) WriteSnapshot(out dstore.Store) (string, error) {
 
 	// Purge of old entities before flushing, because we know these
@@ -151,13 +158,46 @@ func (s *store) WriteSnapshot(out dstore.Store) (string, error) {
 	// * pairHourData: which we know are read/written to only during the same hour.
 	s.purgeCache()
 
-	raw, err := json.Marshal(s.cache)
-	if err != nil {
-		return "", fmt.Errorf("final map marshal: %w", err)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	filename := fmt.Sprintf("%010d-%010d.jsonl", s.startBlock, s.endBlock)
+
+	pr, pw := io.Pipe()
+	go func() {
+		defer cancel()
+		if err := out.WriteObject(ctx, filename, pr); err != nil {
+			s.logger.Error("snapshot: writing to storage", zap.Error(err))
+			if err := pr.CloseWithError(err); err != nil {
+				s.logger.Error("snapshot: closing pipe reader", zap.Error(err))
+			}
+		}
+	}()
+	enc := json.NewEncoder(pw)
+	defer pw.Close()
+
+	tableIdx := make(map[int]string)
+	tableRevIdx := make(map[string]int)
+	i := 0
+	for tableName := range s.cache {
+		tableIdx[i] = tableName
+		tableRevIdx[tableName] = i
+		i++
 	}
-	filename := fmt.Sprintf("%010d-%010d.json", s.startBlock, s.endBlock)
-	if err := out.WriteObject(context.Background(), filename, bytes.NewReader(raw)); err != nil {
-		return "", fmt.Errorf("write object final map: %w", err)
+	if err := enc.Encode(tableIdx); err != nil {
+		return "", err
+	}
+
+	for table, entities := range s.cache {
+		tidx := tableRevIdx[table]
+		for _, entity := range entities {
+			se := snapshotEntity{
+				TableIdx: tidx,
+				Entity:   entity,
+			}
+			if err := enc.Encode(se); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	return filename, nil
@@ -214,18 +254,66 @@ func (s *store) Preload(ctx context.Context, in dstore.Store) error {
 	return nil
 }
 
+type snapshotRawMessage struct {
+	TableIdx int             `json:"t"`
+	Entity   json.RawMessage `json:"d"`
+}
+
 func (s *store) loadSnapshotFile(ctx context.Context, in dstore.Store, snapshotsfilePath string) error {
+
+	s.logger.Info("decoding filepath", zap.String("filepath", snapshotsfilePath))
 	reader, err := in.OpenObject(ctx, snapshotsfilePath)
 	if err != nil {
 		return fmt.Errorf("unable to load input file %q: %w", snapshotsfilePath, err)
 	}
 	defer reader.Close()
 
-	s.logger.Info("decoding filepath", zap.String("filepath", snapshotsfilePath))
-	if err := json.NewDecoder(reader).Decode(s); err != nil {
-		return fmt.Errorf("json decode: %w", err)
+	scanner := bufio.NewScanner(reader)
+	//how big can entities be ?
+	//buf := make([]byte, ScannerMaxCapacity)
+	//scanner.Buffer(buf, ScannerMaxCapacity)
+
+	scanner.Scan()
+	tableIdx := make(map[int]string)
+	if err := json.Unmarshal(scanner.Bytes(), &tableIdx); err != nil {
+		return err
 	}
-	return nil
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	for scanner.Scan() {
+		sr := snapshotRawMessage{}
+		if err := json.Unmarshal(scanner.Bytes(), &sr); err != nil {
+			return err
+		}
+		tableName := tableIdx[sr.TableIdx]
+		fmt.Println("getting type for ", tableName)
+		reflectType, ok := s.subgraph.Entities.GetType(tableName)
+		if !ok {
+			return fmt.Errorf("no entity registered for table name %q", tableName)
+		}
+		cachedTable := s.cache[tableName]
+		if cachedTable == nil {
+			cachedTable = make(map[string]entity.Interface)
+			s.cache[tableName] = cachedTable
+		}
+
+		fmt.Println("got new reflect with type", reflectType)
+		el := reflect.New(reflectType).Interface()
+		if err := json.Unmarshal(sr.Entity, el); err != nil {
+			return fmt.Errorf("unmarshal raw entity: %w", err)
+		}
+
+		modifier := el.(entity.Interface)
+		modifier.SetExists(true)
+
+		id := modifier.GetID()
+		cachedTable[id] = s.subgraph.MergeFunc(s.step, cachedTable[id], modifier)
+
+	}
+
+	return scanner.Err()
 }
 
 func getBlockRange(filename string) (uint64, uint64, error) {
@@ -238,51 +326,6 @@ func getBlockRange(filename string) (uint64, uint64, error) {
 	startBlock, _ := strconv.ParseUint(match[1], 10, 64)
 	stopBlock, _ := strconv.ParseUint(match[2], 10, 64)
 	return startBlock, stopBlock, nil
-}
-
-func (s *store) UnmarshalJSON(in []byte) error {
-	s.logger.Debug("unmarshalling file")
-	var tables map[string]json.RawMessage
-	if err := json.Unmarshal(in, &tables); err != nil {
-		return err
-	}
-
-	for tblName, elements := range tables {
-		s.logger.Debug("handling table", zap.String("table_name", tblName))
-		reflectType, ok := s.subgraph.Entities.GetType(tblName)
-		if !ok {
-			return fmt.Errorf("no entity registered for table name %q", tblName)
-		}
-
-		var entities map[string]json.RawMessage
-		if err := json.Unmarshal(elements, &entities); err != nil {
-			return err
-		}
-		s.logger.Debug("unmarshalled entities map")
-		cachedTable := s.cache[tblName]
-		if cachedTable == nil {
-			cachedTable = make(map[string]entity.Interface)
-			s.cache[tblName] = cachedTable
-		}
-		s.logger.Debug("handling entities", zap.String("table_name", tblName), zap.Int("entity_count", len(entities)))
-		for id, rawEntity := range entities {
-			s.logger.Debug("handling entity",
-				zap.String("table_name", tblName),
-				zap.String("entitiy_id", id),
-			)
-			el := reflect.New(reflectType).Interface()
-			if err := json.Unmarshal(rawEntity, el); err != nil {
-				return fmt.Errorf("unmarshal raw entity: %w", err)
-			}
-
-			modifier := el.(entity.Interface) // 0xaa in the yellow box ( the entity we are reading form the current download state file)
-			modifier.SetExists(true)
-
-			cachedTable[id] = s.subgraph.MergeFunc(s.step, cachedTable[id], modifier)
-		}
-	}
-
-	return nil
 }
 
 func (s *store) BatchSave(ctx context.Context, block *pbcodec.Block, updates map[string]map[string]entity.Interface, cursor string) error {
