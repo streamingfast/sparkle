@@ -126,7 +126,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("unable to load snapshots: %w", err)
 		}
 
-		if enableAggregateSnapshotSave {
+		if enableAggregateSnapshotSave && startBlockNum != 0 && stopBlockNum != 0 {
 			aggregateFilename := fmt.Sprintf("%010d-%010d.jsonl", startBlockNum, stopBlockNum)
 			zlog.Info("flushing aggregate snapshot to input path",
 				zap.String("input_path", inputPath),

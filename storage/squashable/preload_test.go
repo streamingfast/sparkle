@@ -180,6 +180,19 @@ func Test_pathFinderWrapper(t *testing.T) {
 			startBlockNum: 40,
 			expectError:   fmt.Errorf("unable to find a contiguous path expected block 20 actual current block 30"),
 		},
+		{
+			name: "valid file path test",
+			files: []string{
+				testFilename(0, 9),
+				testFilename(0, 19),
+				testFilename(10, 19),
+				testFilename(20, 29),
+			},
+			startBlockNum: 10,
+			expectFilePath: []*SnapshotFile{
+				{testFilename(0, 9), 0, 9},
+			},
+		},
 	}
 
 	for _, test := range test {

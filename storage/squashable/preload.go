@@ -28,6 +28,7 @@ type BlockRange struct {
 }
 
 func (s *store) Preload(ctx context.Context, in dstore.Store) (uint64, uint64, error) {
+	s.logger.Info("prelaoding snapshots")
 	files := []string{}
 	err := in.Walk(context.Background(), "", "", func(filename string) (err error) {
 		files = append(files, filename)
@@ -42,11 +43,18 @@ func (s *store) Preload(ctx context.Context, in dstore.Store) (uint64, uint64, e
 		return 0, 0, fmt.Errorf("unable to find a valid snapshot path: %w", err)
 	}
 
+	s.logger.Info("loading snapshots", zap.Int("file_count", len(snapshotPath)))
+
+	if len(snapshotPath) == 0 {
+		return 0, 0, nil
+	}
+
 	for _, snapshot := range snapshotPath {
 		if err := s.loadSnapshotFile(ctx, in, snapshot.filename); err != nil {
 			return 0, 0, fmt.Errorf("unable to load snapshot file: %w", err)
 		}
 	}
+
 	return snapshotPath[0].startBlockNum, snapshotPath[len(snapshotPath)-1].stopBlockNum, nil
 
 }
@@ -135,7 +143,7 @@ func (s *store) pathFinder(filenames []string) (out []*SnapshotFile, err error) 
 
 		if snapshotFile.startBlockNum == current.startBlockNum {
 			// we need to look at the end block to determine which snapshotFile we want
-			if snapshotFile.stopBlockNum > current.stopBlockNum {
+			if snapshotFile.stopBlockNum > current.stopBlockNum && snapshotFile.stopBlockNum < s.StartBlock {
 				current = snapshotFile
 			}
 			continue
@@ -160,6 +168,9 @@ func (s *store) pathFinder(filenames []string) (out []*SnapshotFile, err error) 
 
 		out = append(out, current)
 		current = snapshotFile
+	}
+	if current == nil {
+		return out, nil
 	}
 	if current.stopBlockNum != (s.StartBlock - 1) {
 		return nil, fmt.Errorf("contiguous path is too short, expected end block %d actual current end block %d", s.StartBlock-1, current.stopBlockNum)
