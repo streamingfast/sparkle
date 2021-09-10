@@ -41,7 +41,7 @@ func TestStore_SnapshotWriter(t *testing.T) {
 	}
 	testStore, err := dstore.NewStore("/tmp/squash-test", "", "", false)
 	require.NoError(t, err)
-	filename, err := testSquasheableStore.WriteSnapshot(testStore)
+	filename, err := testSquasheableStore.WriteSnapshot(testStore, "0000000100-0000000101.jsonl")
 	require.NoError(t, err)
 
 	newTestSquasheableStore := &store{

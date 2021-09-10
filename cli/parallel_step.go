@@ -40,6 +40,7 @@ func init() {
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
 	parallelStepCmd.Flags().Bool("debug-cache", false, "Enables a cache dump after the preload, and before the batch is run in 'tmp/content.json'")
 	parallelStepCmd.Flags().Bool("enable-poi", false, "Enable POI injection")
+	parallelStepCmd.Flags().Bool("enable-aggregate-snapshot-save", false, "Enable the save of the aggregate snapshot")
 	parallelStepCmd.Flags().Bool("non-archive-node", false, "Remove the requirement for an archive node. RPC Calls will be called on LATEST (breaks consistency and POI)")
 	parallelStepCmd.Flags().String("rpc-cache-load-path", "", "If non-empty, will load and use rpc request/response cache from this path")
 	parallelStepCmd.Flags().String("rpc-cache-save-path", "", "If non-empty, will save rpc request/response cache to this path (can be the same as load-path to append data)")
@@ -64,6 +65,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	storeSnapshot := viper.GetBool("parallel-step-cmd-store-snapshot")
 	debugCache := viper.GetBool("parallel-step-cmd-debug-cache")
 	enablePOI := viper.GetBool("parallel-step-cmd-enable-poi")
+	enableAggregateSnapshotSave := viper.GetBool("parallel-step-cmd-enable-aggregate-snapshot-save")
 	nonArchiveNode := viper.GetBool("parallel-step-cmd-non-archive-node")
 
 	zlog.Info("fetching transactions for network",
@@ -81,6 +83,7 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		zap.Bool("store_snapshots", storeSnapshot),
 		zap.Bool("debug_cache", debugCache),
 		zap.Bool("enable_poi", enablePOI),
+		zap.Bool("enable_aggregate_snapshot_save", enableAggregateSnapshotSave),
 		zap.Bool("non_archive_node", nonArchiveNode),
 	)
 
@@ -118,12 +121,27 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 	}
 
 	if inputStore != nil {
-		err := squashableStore.Preload(ctx, inputStore)
-		derr.Check("unable to preload", err)
+		startBlockNum, stopBlockNum, err := squashableStore.Preload(ctx, inputStore)
+		if err != nil {
+			return fmt.Errorf("unable to load snapshots: %w", err)
+		}
+
+		if enableAggregateSnapshotSave {
+			aggregateFilename := fmt.Sprintf("%010d-%010d.jsonl", startBlockNum, stopBlockNum)
+			zlog.Info("flushing aggregate snapshot to input path",
+				zap.String("input_path", inputPath),
+				zap.Int("step", step),
+				zap.String("snapshot_filename", aggregateFilename),
+			)
+			_, err = squashableStore.WriteSnapshot(inputStore, aggregateFilename)
+			if err != nil {
+				return fmt.Errorf("unable store aggregate snapshot: %w", err)
+			}
+		}
 	}
 
 	if debugCache {
-		zlog.Info("dummping Dumping squashed cache content into /tmp/content.json")
+		zlog.Info("dumping Dumping squashed cache content into /tmp/content.json")
 		cnt, _ := json.MarshalIndent(squashableStore.GetCache(), "", "  ")
 		ioutil.WriteFile("/tmp/content.json", cnt, 0644)
 	}
@@ -210,8 +228,13 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 
 	}
 	if storeSnapshot {
-		zlog.Info("flushing snapshot", zap.Int("step", step))
-		_, err := squashableStore.WriteSnapshot(outputStore)
+		snapshotFilename := fmt.Sprintf("%010d-%010d.jsonl", squashableStore.StartBlock, squashableStore.EndBlock)
+		zlog.Info("flushing snapshot to output store",
+			zap.Int("step", step),
+			zap.String("output_path", outputPath),
+			zap.String("snapshot_filename", snapshotFilename),
+		)
+		_, err := squashableStore.WriteSnapshot(outputStore, snapshotFilename)
 		if err != nil {
 			return err
 		}

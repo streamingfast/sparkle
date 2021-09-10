@@ -1,14 +1,11 @@
 package squashable
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
-	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/streamingfast/dstore"
@@ -30,8 +27,8 @@ type store struct {
 	entityWriters          map[string]*entityWriter
 	entitiesFlushCompleted chan struct{}
 
-	startBlock         uint64
-	endBlock           uint64
+	StartBlock         uint64
+	EndBlock           uint64
 	lastBlockTimestamp time.Time
 	lastBlockNum       uint64
 
@@ -97,8 +94,8 @@ func New(ctx context.Context, logger *zap.Logger, subgraph *subgraph.Definition,
 		cache:         cache,
 		entityWriters: map[string]*entityWriter{},
 		step:          step,
-		startBlock:    startBlock,
-		endBlock:      endBlock,
+		StartBlock:    startBlock,
+		EndBlock:      endBlock,
 		logger:        logger,
 	}
 }
@@ -106,7 +103,7 @@ func New(ctx context.Context, logger *zap.Logger, subgraph *subgraph.Definition,
 func (s *store) FlushEntities(store dstore.Store) {
 	s.logger.Info("setting up flush entities store")
 	for tblName := range s.subgraph.Entities.Data() {
-		entWriter := newEntityWriter(s.logger, store, fmt.Sprintf("%s/%010d-%010d-entities.jsonl", tblName, s.startBlock, s.endBlock), tblName)
+		entWriter := newEntityWriter(s.logger, store, fmt.Sprintf("%s/%010d-%010d-entities.jsonl", tblName, s.StartBlock, s.EndBlock), tblName)
 		go func() {
 			err := entWriter.run(s.ctx)
 			if err != nil {
@@ -148,20 +145,17 @@ type snapshotEntity struct {
 	Entity   entity.Interface `json:"d"`
 }
 
-func (s *store) WriteSnapshot(out dstore.Store) (string, error) {
+func (s *store) WriteSnapshot(out dstore.Store, filename string) (string, error) {
 
 	// Purge of old entities before flushing, because we know these
 	// things will not be Loaded by the next shard.
 	//
 	// For example:
-	// * transactions that are writte and read ONLY in the same block
+	// * transactions that are writter and read ONLY in the same block
 	// * pairHourData: which we know are read/written to only during the same hour.
 	s.purgeCache()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	filename := fmt.Sprintf("%010d-%010d.jsonl", s.startBlock, s.endBlock)
-
 	done := make(chan bool)
 	pr, pw := io.Pipe()
 	go func() {
@@ -220,116 +214,6 @@ func (s *store) purgeCache() {
 			}
 		}
 	}
-}
-
-func (s *store) Preload(ctx context.Context, in dstore.Store) error {
-	filesToLoad := []string{}
-	var endRange uint64
-	err := in.Walk(context.Background(), "", "", func(filename string) (err error) {
-		startBlockNum, endBlockNum, err := getBlockRange(filename)
-		if err != nil {
-			return err
-		}
-
-		if endRange == 0 {
-			endRange = endBlockNum
-		} else {
-			if startBlockNum != (endRange + 1) {
-				return fmt.Errorf("broken file contiguity at %q (previous range end was %d)", filename, endRange)
-			}
-			endRange = endBlockNum
-		}
-
-		if startBlockNum < s.startBlock {
-			filesToLoad = append(filesToLoad, filename)
-		} else {
-			return dstore.StopIteration
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("unable to walk input store: %w", err)
-	}
-
-	for _, filepath := range filesToLoad {
-		if err := s.loadSnapshotFile(ctx, in, filepath); err != nil {
-			return fmt.Errorf("unable to load snapshot file: %w", err)
-		}
-	}
-
-	return nil
-}
-
-type snapshotRawMessage struct {
-	TableIdx int             `json:"t"`
-	Entity   json.RawMessage `json:"d"`
-}
-
-func (s *store) loadSnapshotFile(ctx context.Context, in dstore.Store, snapshotsfilePath string) error {
-
-	s.logger.Info("decoding filepath", zap.String("filepath", snapshotsfilePath))
-	reader, err := in.OpenObject(ctx, snapshotsfilePath)
-	if err != nil {
-		return fmt.Errorf("unable to load input file %q: %w", snapshotsfilePath, err)
-	}
-	defer reader.Close()
-
-	scanner := bufio.NewScanner(reader)
-	//how big can entities be ?
-	//buf := make([]byte, ScannerMaxCapacity)
-	//scanner.Buffer(buf, ScannerMaxCapacity)
-
-	scanner.Scan()
-	tableIdx := make(map[int]string)
-	if err := json.Unmarshal(scanner.Bytes(), &tableIdx); err != nil {
-		return err
-	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	for scanner.Scan() {
-		sr := snapshotRawMessage{}
-		if err := json.Unmarshal(scanner.Bytes(), &sr); err != nil {
-			return err
-		}
-		tableName := tableIdx[sr.TableIdx]
-		reflectType, ok := s.subgraph.Entities.GetType(tableName)
-		if !ok {
-			return fmt.Errorf("no entity registered for table name %q", tableName)
-		}
-		cachedTable := s.cache[tableName]
-		if cachedTable == nil {
-			cachedTable = make(map[string]entity.Interface)
-			s.cache[tableName] = cachedTable
-		}
-
-		el := reflect.New(reflectType).Interface()
-		if err := json.Unmarshal(sr.Entity, el); err != nil {
-			return fmt.Errorf("unmarshal raw entity: %w", err)
-		}
-
-		modifier := el.(entity.Interface)
-		modifier.SetExists(true)
-
-		id := modifier.GetID()
-		cachedTable[id] = s.subgraph.MergeFunc(s.step, cachedTable[id], modifier)
-
-	}
-
-	return scanner.Err()
-}
-
-func getBlockRange(filename string) (uint64, uint64, error) {
-	number := regexp.MustCompile(`(\d{10})-(\d{10})`)
-	match := number.FindStringSubmatch(filename)
-	if match == nil {
-		return 0, 0, fmt.Errorf("no block range in filename: %s", filename)
-	}
-
-	startBlock, _ := strconv.ParseUint(match[1], 10, 64)
-	stopBlock, _ := strconv.ParseUint(match[2], 10, 64)
-	return startBlock, stopBlock, nil
 }
 
 func (s *store) BatchSave(ctx context.Context, block *pbcodec.Block, updates map[string]map[string]entity.Interface, cursor string) error {
