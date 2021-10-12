@@ -56,7 +56,6 @@ func newEntityWriter(logger *zap.Logger, store dstore.Store, filename, tblName s
 		done:     make(chan struct{}),
 		logger:   logger,
 	}
-
 }
 
 func (ew *entityWriter) run(ctx context.Context) error {
@@ -83,7 +82,13 @@ func (ew *entityWriter) close() error {
 	return nil
 }
 
-func New(ctx context.Context, logger *zap.Logger, subgraph *subgraph.Definition, step int, startBlock, endBlock uint64) *store {
+func New(
+	ctx context.Context,
+	logger *zap.Logger,
+	subgraph *subgraph.Definition,
+	step int,
+	startBlock, endBlock uint64,
+) *store {
 	cache := map[string]map[string]entity.Interface{}
 	for tbl := range subgraph.Entities.Data() {
 		cache[tbl] = map[string]entity.Interface{}
@@ -103,7 +108,12 @@ func New(ctx context.Context, logger *zap.Logger, subgraph *subgraph.Definition,
 func (s *store) FlushEntities(store dstore.Store) {
 	s.logger.Info("setting up flush entities store")
 	for tblName := range s.subgraph.Entities.Data() {
-		entWriter := newEntityWriter(s.logger, store, fmt.Sprintf("%s/%010d-%010d-entities.jsonl", tblName, s.StartBlock, s.EndBlock), tblName)
+		entWriter := newEntityWriter(
+			s.logger,
+			store,
+			fmt.Sprintf("%s/%010d-%010d-entities.jsonl", tblName, s.StartBlock, s.EndBlock),
+			tblName,
+		)
 		go func() {
 			err := entWriter.run(s.ctx)
 			if err != nil {
@@ -146,7 +156,6 @@ type snapshotEntity struct {
 }
 
 func (s *store) WriteSnapshot(out dstore.Store, filename string) (string, error) {
-
 	// Purge of old entities before flushing, because we know these
 	// things will not be Loaded by the next shard.
 	//
@@ -204,6 +213,10 @@ func (s *store) WriteSnapshot(out dstore.Store, filename string) (string, error)
 }
 
 func (s *store) purgeCache() {
+	if s.lastBlockNum == 0 {
+		s.logger.Info("skipping purge_cache because no block has been processed yet")
+		return
+	}
 	// we're at bf()OCK
 	for _, rows := range s.cache {
 		for id, ent := range rows {
@@ -216,7 +229,12 @@ func (s *store) purgeCache() {
 	}
 }
 
-func (s *store) BatchSave(ctx context.Context, block *pbcodec.Block, updates map[string]map[string]entity.Interface, cursor string) error {
+func (s *store) BatchSave(
+	ctx context.Context,
+	block *pbcodec.Block,
+	updates map[string]map[string]entity.Interface,
+	cursor string,
+) error {
 	s.lastBlockTimestamp = block.Header.Timestamp.AsTime()
 	s.lastBlockNum = block.Number
 	// naviate updates
@@ -274,7 +292,11 @@ func (s *store) Load(ctx context.Context, id string, out entity.Interface, block
 	return nil
 }
 
-func (s *store) LoadAllDistinct(ctx context.Context, model entity.Interface, blockNum uint64) (out []entity.Interface, err error) {
+func (s *store) LoadAllDistinct(
+	ctx context.Context,
+	model entity.Interface,
+	blockNum uint64,
+) (out []entity.Interface, err error) {
 	tableName := entity.GetTableName(model)
 	tbl, found := s.cache[tableName]
 	if !found {
