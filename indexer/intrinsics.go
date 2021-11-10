@@ -250,11 +250,16 @@ func (d *defaultIntrinsic) RPC(calls []*subgraph.RPCCall) ([]*subgraph.RPCRespon
 			continue
 		}
 
+		var nonDeterministicResp bool
 		for _, resp := range out {
 			if !resp.Deterministic() {
 				zlog.Warn("retrying RPCCall on non-deterministic RPC call error", zap.Error(resp.Err), zap.Uint64("at_block", d.blockRef.num))
-				continue
+				nonDeterministicResp = true
+				break
 			}
+		}
+		if nonDeterministicResp {
+			continue
 		}
 		if d.rpcCache != nil {
 			d.rpcCache.Set(cacheKey, out)
