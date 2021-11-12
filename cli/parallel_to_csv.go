@@ -30,6 +30,7 @@ var parallelToCSVCmd = &cobra.Command{
 func init() {
 	parallelToCSVCmd.Flags().Int("chunk-size", 0, "chunk of blocks in each outputted CSV file")
 	parallelToCSVCmd.Flags().StringSlice("only-tables", []string{}, "Converts entities only for the following tables")
+	parallelToCSVCmd.Flags().Uint64("truncate-before-block", 0, "any closed entity before that block number will be truncated (for big subgraphs with limited use for historical per-block-data)")
 
 	parallelCmd.AddCommand(parallelToCSVCmd)
 }
@@ -41,6 +42,7 @@ func runParallelToCSV(cmd *cobra.Command, _ []string) error {
 	chunkSize := viper.GetInt("parallel-to-csv-cmd-chunk-size")
 	startBlockNum := viper.GetUint64("parallel-cmd-start-block")
 	stopBlockNum := viper.GetUint64("parallel-cmd-stop-block")
+	truncateBeforeBlockNum := viper.GetUint64("parallel-to-csv-cmd-truncate-before-block")
 	onlyTables := viper.GetStringSlice("parallel-to-csv-cmd-only-tables")
 
 	zlog.Info("turning entities into csv files",
@@ -49,6 +51,7 @@ func runParallelToCSV(cmd *cobra.Command, _ []string) error {
 		zap.Int("chunk_size", chunkSize),
 		zap.Strings("only_tables", onlyTables),
 		zap.Uint64("stop_block_num", stopBlockNum),
+		zap.Uint64("truncateBeforeBlockNum", truncateBeforeBlockNum),
 		zap.Uint64("start_block_num", startBlockNum),
 		zap.Strings("only_tables", onlyTables),
 	)
@@ -100,7 +103,7 @@ func runParallelToCSV(cmd *cobra.Command, _ []string) error {
 		zlog.Info("starting shard", zap.String("tableName", tableName))
 
 		eg.Go(func() error {
-			ts := newTableShard(ctx, tableName, entitiesRegistry, inputStore, outputStore, chunkSize, startBlockNum, stopBlockNum)
+			ts := newTableShard(ctx, tableName, entitiesRegistry, inputStore, outputStore, chunkSize, startBlockNum, stopBlockNum, truncateBeforeBlockNum)
 			metrics, err := ts.Run()
 			if err != nil {
 				return err
@@ -129,17 +132,18 @@ func runParallelToCSV(cmd *cobra.Command, _ []string) error {
 }
 
 type TableShard struct {
-	ctx            context.Context
-	tableName      string
-	in             dstore.Store
-	out            dstore.Store
-	chunkSize      uint64
-	stopBlockNum   uint64
-	csvExporter    *csvexport.Writer
-	entities       map[string]entity.Interface
-	metrics        *tableShardMetrics
-	startBlockNum  uint64
-	entityRegistry *entity.Registry
+	ctx                    context.Context
+	tableName              string
+	in                     dstore.Store
+	out                    dstore.Store
+	chunkSize              uint64
+	stopBlockNum           uint64
+	csvExporter            *csvexport.Writer
+	entities               map[string]entity.Interface
+	metrics                *tableShardMetrics
+	startBlockNum          uint64
+	truncateBeforeBlockNum uint64
+	entityRegistry         *entity.Registry
 }
 
 type tableShardMetrics struct {
@@ -158,17 +162,18 @@ func (ts *tableShardMetrics) showProgress() bool {
 	return ts.entityCount%4000 == 0
 }
 
-func newTableShard(ctx context.Context, tableName string, entityRegistry *entity.Registry, in, out dstore.Store, chunkSize int, startBlockNum, stopBlockNum uint64) *TableShard {
+func newTableShard(ctx context.Context, tableName string, entityRegistry *entity.Registry, in, out dstore.Store, chunkSize int, startBlockNum, stopBlockNum, truncateBeforeBlockNum uint64) *TableShard {
 	return &TableShard{
-		ctx:            ctx,
-		tableName:      tableName,
-		in:             in,
-		out:            out,
-		chunkSize:      uint64(chunkSize),
-		startBlockNum:  startBlockNum,
-		stopBlockNum:   stopBlockNum,
-		entityRegistry: entityRegistry,
-		entities:       make(map[string]entity.Interface),
+		ctx:                    ctx,
+		tableName:              tableName,
+		in:                     in,
+		out:                    out,
+		chunkSize:              uint64(chunkSize),
+		startBlockNum:          startBlockNum,
+		stopBlockNum:           stopBlockNum,
+		truncateBeforeBlockNum: truncateBeforeBlockNum,
+		entityRegistry:         entityRegistry,
+		entities:               make(map[string]entity.Interface),
 		metrics: &tableShardMetrics{
 			entityCount: 0,
 			blockCount:  0,
@@ -359,8 +364,17 @@ func (ts *TableShard) processEntityFile(filename string) error {
 					ent = processProofOfIndex(prev, ent)
 				}
 
-				if err := ts.writeEntity(currentBlock.BlockNum, prev); err != nil {
-					return fmt.Errorf("write csv encoded: %w", err)
+				if currentBlock.BlockNum > ts.truncateBeforeBlockNum {
+					if err := ts.writeEntity(currentBlock.BlockNum, prev); err != nil {
+						return fmt.Errorf("write csv encoded: %w", err)
+					}
+					//} else {
+					//zlog.Debug("skipping csv write of older entity",
+					//    zap.Uint64("block_num", currentBlock.BlockNum),
+					//    zap.String("table_name", ts.tableName),
+					//    zap.String("entity_id", id),
+					//)
+					//}
 				}
 			}
 
