@@ -5,7 +5,7 @@ var templateHandler = `
 package {{ .PackageName }}
 
 import (
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 )
 
 func (s *Subgraph) {{ $engine.ToCamelCase .CurrentHandlerName}}(ev *{{ .CurrentEvent }}Event) error {

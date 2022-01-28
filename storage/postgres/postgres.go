@@ -14,7 +14,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/streamingfast/sparkle/entity"
 	"github.com/streamingfast/sparkle/metrics"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 	"github.com/streamingfast/sparkle/subgraph"
 	"go.uber.org/zap"
 )

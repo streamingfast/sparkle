@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/streamingfast/eth-go/rpc"
-	pbbstream "github.com/streamingfast/pbgo/dfuse/bstream/v1"
+	pbbstream "github.com/streamingfast/pbgo/sf/bstream/v1"
 	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/sparkle/blocks"
 	"github.com/streamingfast/sparkle/entity"

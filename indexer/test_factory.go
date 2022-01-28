@@ -3,16 +3,17 @@ package indexer
 import (
 	"context"
 
-	pbbstream "github.com/streamingfast/pbgo/dfuse/bstream/v1"
+	pbfirehose "github.com/streamingfast/pbgo/sf/firehose/v1"
 	"google.golang.org/grpc/metadata"
 )
 
 type TestBlocksClient struct {
-	blocks []*pbbstream.BlockResponseV2
+	blocks []*pbfirehose.Response
 }
 
-func (t *TestBlocksClient) Recv() (*pbbstream.BlockResponseV2, error) {
-	var res *pbbstream.BlockResponseV2
+// func (pbfirehose.Stream_BlocksClient).Recv() (*pbfirehose.Response, error)
+func (t *TestBlocksClient) Recv() (*pbfirehose.Response, error) {
+	var res *pbfirehose.Response
 	res, t.blocks = t.blocks[len(t.blocks)-1], t.blocks[:len(t.blocks)-1]
 	return res, nil
 }

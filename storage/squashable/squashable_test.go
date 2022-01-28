@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/streamingfast/dstore"
 	"github.com/streamingfast/sparkle/entity"
 	"github.com/streamingfast/sparkle/testgraph/testgraph"
@@ -52,5 +51,5 @@ func TestStore_SnapshotWriter(t *testing.T) {
 
 	err = newTestSquasheableStore.loadSnapshotFile(ctx, testStore, filename)
 	require.NoError(t, err)
-	spew.Dump(newTestSquasheableStore.cache)
+	//spew.Dump(newTestSquasheableStore.cache)
 }

@@ -2,7 +2,7 @@ package subgraph
 
 import (
 	"github.com/streamingfast/sparkle/entity"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 	"go.uber.org/zap"
 )
 

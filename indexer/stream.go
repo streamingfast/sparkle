@@ -6,17 +6,16 @@ import (
 	"io"
 	"time"
 
-	"github.com/streamingfast/bstream/forkable"
-
 	"github.com/streamingfast/bstream/firehose"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/streamingfast/bstream"
 	"github.com/streamingfast/dmetrics"
-	pbbstream "github.com/streamingfast/pbgo/dfuse/bstream/v1"
+	pbfirehose "github.com/streamingfast/pbgo/sf/firehose/v1"
 	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/sparkle/blocks"
 	"github.com/streamingfast/sparkle/metrics"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 	"github.com/streamingfast/sparkle/storage"
 	"github.com/streamingfast/sparkle/subgraph"
 	"go.uber.org/zap"
@@ -109,7 +108,7 @@ func (s *subgraphStream) Start() {
 			return blockNum, nil
 		}
 
-		cursorObj, err := forkable.CursorFromOpaque(cursor)
+		cursorObj, err := bstream.CursorFromOpaque(cursor)
 		if err != nil {
 			return 0, fmt.Errorf("cursor from opaque: %w", err)
 		}
@@ -241,22 +240,21 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 
 	// Launch streaming thing
 
-	forkSteps := []pbbstream.ForkStep{pbbstream.ForkStep_STEP_IRREVERSIBLE}
+	forkSteps := []pbfirehose.ForkStep{pbfirehose.ForkStep_STEP_IRREVERSIBLE}
 	if s.withReversible {
-		forkSteps = []pbbstream.ForkStep{
-			pbbstream.ForkStep_STEP_NEW,
-			pbbstream.ForkStep_STEP_UNDO,
+		forkSteps = []pbfirehose.ForkStep{
+			pbfirehose.ForkStep_STEP_NEW,
+			pbfirehose.ForkStep_STEP_UNDO,
 		}
 	}
 
 	s.logger.Info("requesting blocks", zap.String("cursor", cursor), zap.Int64("start_block_num", s.startBlock), zap.Uint64("stop_block_num", s.stopBlock))
-	stream, err := s.streamFactory.StreamBlocks(ctx, &pbbstream.BlocksRequestV2{
+	stream, err := s.streamFactory.StreamBlocks(ctx, &pbfirehose.Request{
 		StartBlockNum:     s.startBlock,
 		StartCursor:       cursor,
 		StopBlockNum:      s.stopBlock,
 		ForkSteps:         forkSteps,
 		IncludeFilterExpr: s.subgraph.IncludeFilter,
-		Details:           pbbstream.BlockDetails_BLOCK_DETAILS_FULL,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to create blocks stream of subgraph %q: %w", s.subgraph.PackageName, err)
@@ -306,7 +304,11 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 			return nil
 		}
 
-		block := response.Block.(*pbcodec.Block)
+		block := &pbcodec.Block{}
+		if err := ptypes.UnmarshalAny(response.Block, block); err != nil {
+			panic(err)
+		}
+
 		s.lastBlockRef = block.AsRef()
 
 		unmarshalledBlocks <- &unmarshalledBlock{
@@ -319,7 +321,7 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 
 func (s *subgraphStream) processUnmarshalledBlock(response *unmarshalledBlock) (err error) {
 	// Accumulate UNDO steps, and clean-up on the very next NEW
-	if response.step == pbbstream.ForkStep_STEP_UNDO {
+	if response.step == pbfirehose.ForkStep_STEP_UNDO {
 		s.cleanupNeeded = true
 		if s.forkHeadRef == nil {
 			s.forkHeadRef = response.block.AsRef()
@@ -395,7 +397,7 @@ type unmarshalledBlock struct {
 	block  *pbcodec.Block
 	err    error
 	cursor string
-	step   pbbstream.ForkStep
+	step   pbfirehose.ForkStep
 }
 
 func waitForEmptyChannel(ch chan *unmarshalledBlock) {

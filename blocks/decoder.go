@@ -1,34 +1,44 @@
+// Copyright 2021 dfuse Platform Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package blocks
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/streamingfast/bstream"
-	"github.com/streamingfast/dbin"
-	pbbstream "github.com/streamingfast/pbgo/dfuse/bstream/v1"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbbstream "github.com/streamingfast/pbgo/sf/bstream/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 )
 
-func init() {
-	bstream.GetBlockReaderFactory = bstream.BlockReaderFactoryFunc(blockReaderFactory)
-	bstream.GetBlockDecoder = bstream.BlockDecoderFunc(BlockDecoder)
-	//bstream.GetProtocolFirstStreamableBlock = 0
-	bstream.GetBlockWriterHeaderLen = 10
-}
-
 func BlockDecoder(blk *bstream.Block) (interface{}, error) {
-	// if blk.Kind() != pbbstream.Protocol_ETH {
-	//      return nil, fmt.Errorf("expected kind %s, got %s", pbbstream.Protocol_ETH, blk.Kind())
-	// }
+	if blk.Kind() != pbbstream.Protocol_ETH {
+		return nil, fmt.Errorf("expected kind %s, got %s", pbbstream.Protocol_ETH, blk.Kind())
+	}
 
 	if blk.Version() != 1 {
 		return nil, fmt.Errorf("this decoder only knows about version 1, got %d", blk.Version())
 	}
 
 	block := new(pbcodec.Block)
-	err := proto.Unmarshal(blk.Payload(), block)
+	pl, err := blk.Payload.Get()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get payload: %s", err)
+	}
+
+	err = proto.Unmarshal(pl, block)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode payload: %s", err)
 	}
@@ -43,62 +53,43 @@ func BlockDecoder(blk *bstream.Block) (interface{}, error) {
 	// automatically instead of having to re-deploy a new version of bstream (which means
 	// rebuild everything mostly)
 	//
-	// We reconstruct the state reverted value per call, for each transaction traces
+	// We reconstruct the state reverted value per call, for each transaction traces. We also
+	// normalize signature curve points since we were not setting to be alwasy 32 bytes long and
+	// sometimes, it would have been only 31 bytes long.
 	for _, trx := range block.TransactionTraces {
 		trx.PopulateStateReverted()
+		trx.PopulateTrxStatus()
+
+		if len(trx.R) > 0 && len(trx.R) != 32 {
+			trx.R = normalizeSignaturePoint(trx.R)
+		}
+
+		if len(trx.S) > 0 && len(trx.S) != 32 {
+			trx.S = normalizeSignaturePoint(trx.S)
+		}
 	}
+
+	// We leverage StateReverted field inside the `PopulateLogBlockIndices`
+	// and as such, it must be invoked after the `PopulateStateReverted` has
+	// been executed.
+	block.PopulateLogBlockIndices()
 
 	return block, nil
 }
 
-// BlockReader reads the dbin format where each element is assumed to be a `bstream.Block`.
-type BlockReader struct {
-	src *dbin.Reader
-}
-
-func blockReaderFactory(reader io.Reader) (bstream.BlockReader, error) {
-	return NewBlockReader(reader)
-}
-
-func NewBlockReader(reader io.Reader) (out *BlockReader, err error) {
-	dbinReader := dbin.NewReader(reader)
-	contentType, version, err := dbinReader.ReadHeader()
-	if err != nil {
-		return nil, fmt.Errorf("unable to read file header: %s", err)
+func normalizeSignaturePoint(value []byte) []byte {
+	if len(value) == 0 {
+		return value
 	}
 
-	Protocol := pbbstream.Protocol(pbbstream.Protocol_value[contentType])
+	if len(value) < 32 {
+		offset := 32 - len(value)
 
-	if Protocol != pbbstream.Protocol_ETH && version != 1 {
-		return nil, fmt.Errorf("reader only knows about %s block kind at version 1, got %s at version %d", Protocol, contentType, version)
+		out := make([]byte, 32)
+		copy(out[offset:32], value)
+
+		return out
 	}
 
-	return &BlockReader{
-		src: dbinReader,
-	}, nil
-}
-
-func (l *BlockReader) Read() (*bstream.Block, error) {
-	message, err := l.src.ReadMessage()
-	if len(message) > 0 {
-		pbBlock := new(pbbstream.Block)
-		err = proto.Unmarshal(message, pbBlock)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read block proto: %s", err)
-		}
-
-		blk, err := bstream.BlockFromProto(pbBlock)
-		if err != nil {
-			return nil, err
-		}
-
-		return blk, nil
-	}
-
-	if err == io.EOF {
-		return nil, err
-	}
-
-	// In all other cases, we are in an error path
-	return nil, fmt.Errorf("failed reading next dbin message: %s", err)
+	return value[0:32]
 }

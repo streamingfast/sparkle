@@ -5,14 +5,11 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes"
-	pbany "github.com/golang/protobuf/ptypes/any"
-	blockstream "github.com/streamingfast/bstream/blockstream/v2"
 	dfuse "github.com/streamingfast/client-go"
 	"github.com/streamingfast/dgrpc"
 	"github.com/streamingfast/dstore"
-	pbbstream "github.com/streamingfast/pbgo/dfuse/bstream/v1"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	firehose "github.com/streamingfast/firehose"
+	pbfirehose "github.com/streamingfast/pbgo/sf/firehose/v1"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -23,31 +20,27 @@ import (
 // This contains an idea about an easier way to create Firehose stream. The factory is always
 // fully aware of all dependencies and is able
 
-func init() {
-	blockstream.StreamBlocksParallelFiles = 2
-}
-
 type Firehose interface {
-	StreamBlocks(ctx context.Context, req *pbbstream.BlocksRequestV2) (blockstream.UnmarshalledBlockStreamV2Client, error)
+	StreamBlocks(ctx context.Context, req *pbfirehose.Request) (pbfirehose.Stream_BlocksClient, error)
 }
 
 type StreamingFastFirehoseFactory struct {
 	dfuseClient  dfuse.Client
-	streamClient pbbstream.BlockStreamV2Client
+	streamClient pbfirehose.StreamClient
 }
 
 type LocalFirehoseFactory struct {
-	blockstreamServer *blockstream.Server
+	blockstreamServer *firehose.Server
 }
 
-func (f *LocalFirehoseFactory) StreamBlocks(ctx context.Context, req *pbbstream.BlocksRequestV2) (blockstream.UnmarshalledBlockStreamV2Client, error) {
-	return f.blockstreamServer.UnmarshalledBlocksFromLocal(ctx, req), nil
+func (f *LocalFirehoseFactory) StreamBlocks(ctx context.Context, req *pbfirehose.Request) (pbfirehose.Stream_BlocksClient, error) {
+	return f.blockstreamServer.BlocksFromLocal(ctx, req), nil
 }
 
 func NewLocalFirehoseFactory(store dstore.Store) *LocalFirehoseFactory {
 	stores := []dstore.Store{store}
 	return &LocalFirehoseFactory{
-		blockstreamServer: blockstream.NewServer(zlog, stores, nil, nil, nil, nil),
+		blockstreamServer: firehose.NewServer(zlog, stores, nil, false, nil, nil, nil, nil, nil),
 	}
 
 }
@@ -70,11 +63,11 @@ func NewStreamingFastFirehoseFactory(apiKey string, endpoint string) (*Streaming
 
 	return &StreamingFastFirehoseFactory{
 		dfuseClient:  dfuseClient,
-		streamClient: pbbstream.NewBlockStreamV2Client(conn),
+		streamClient: pbfirehose.NewStreamClient(conn),
 	}, nil
 }
 
-func (f *StreamingFastFirehoseFactory) StreamBlocks(ctx context.Context, req *pbbstream.BlocksRequestV2) (blockstream.UnmarshalledBlockStreamV2Client, error) {
+func (f *StreamingFastFirehoseFactory) StreamBlocks(ctx context.Context, req *pbfirehose.Request) (pbfirehose.Stream_BlocksClient, error) {
 	tokenInfo, err := f.dfuseClient.GetAPITokenInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve StreamingFast API initialToken: %w", err)
@@ -83,15 +76,10 @@ func (f *StreamingFastFirehoseFactory) StreamBlocks(ctx context.Context, req *pb
 	zlog.Info("retrieved dfuse API token", zap.String("token", tokenInfo.Token))
 	creds := oauth.NewOauthAccess(&oauth2.Token{AccessToken: tokenInfo.Token, TokenType: "Bearer"})
 
-	blocksClient, err := f.streamClient.Blocks(ctx, req, grpc.PerRPCCredentials(creds))
-	if err != nil {
-		return nil, err
-	}
-	return blockstream.GetUnmarshalledBlockClient(ctx, blocksClient, func(in *pbany.Any) interface{} {
-		block := &pbcodec.Block{}
-		if err := ptypes.UnmarshalAny(in, block); err != nil {
-			panic(err)
-		}
-		return block
-	}), nil
+	return f.streamClient.Blocks(ctx, req, grpc.PerRPCCredentials(creds))
+	//		block := &pbcodec.Block{}
+	//		if err := ptypes.UnmarshalAny(in, block); err != nil {
+	//			panic(err)
+	//		}
+	//		return block
 }

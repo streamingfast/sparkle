@@ -17,7 +17,7 @@ import (
 	"github.com/streamingfast/sparkle/subgraph"
 	"github.com/streamingfast/sparkle/entity"
 	eth "github.com/streamingfast/eth-go"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 
 )
 `

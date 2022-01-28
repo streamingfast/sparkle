@@ -9,7 +9,7 @@ import (
 
 	eth "github.com/streamingfast/eth-go"
 	"github.com/streamingfast/sparkle/entity"
-	pbcodec "github.com/streamingfast/sparkle/pb/dfuse/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
 	"github.com/streamingfast/sparkle/subgraph"
 )
 
@@ -263,8 +263,7 @@ func (next *TestEntity) Merge(step int, cached *TestEntity) {
 
 func (s *Subgraph) HandleBlock(block *pbcodec.Block) error {
 	for _, trace := range block.TransactionTraces {
-		logs := trace.Logs()
-		for _, log := range logs {
+		for _, log := range trace.Receipt.Logs{
 			var ethLog interface{} = log
 			eventLog := codecLogToEthLog(ethLog.(*pbcodec.Log))
 			if bytes.Equal(FactoryAddressBytes, log.Address) {
