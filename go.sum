@@ -901,6 +901,8 @@ github.com/streamingfast/client-go v0.0.0-20210811201850-a359c7648d44 h1:QaqedA0
 github.com/streamingfast/client-go v0.0.0-20210811201850-a359c7648d44/go.mod h1:tlALGiqyWZ1KsCD+4bZSliOBdSA0VmRhM+ySb6Ub1sQ=
 github.com/streamingfast/client-go v0.1.1-0.20211209213306-176b10240a19 h1:Tm1dBTl+zwXNoyAwQ8jMwUHYWyy/MyEYsbYqhUQATvY=
 github.com/streamingfast/client-go v0.1.1-0.20211209213306-176b10240a19/go.mod h1:M+55gkc60al+d8AjAmpFgs49QUX1QjzOhqjIbY0zgms=
+github.com/streamingfast/client-go v0.1.1-0.20220215005344-ebb57842b6ad h1:K9DnWC3bvY54iXi8O0Nahjkf520JUypViIu6uxJHn4Y=
+github.com/streamingfast/client-go v0.1.1-0.20220215005344-ebb57842b6ad/go.mod h1:uMTe4VSKwiduITjQkTKUFgB6vb6PBU92kQvPAOsFnEY=
 github.com/streamingfast/dauth v0.0.0-20210811181149-e8fd545948cc/go.mod h1:wwjRBEA7vZZ5kfy3I4LB5NJhFJWN2gaYgpBEmOnDwD8=
 github.com/streamingfast/dauth v0.0.0-20210812020920-1c83ba29add1 h1:jZrytO3UXSEQEG1pTHDEfnLkc5JK5KEY7urxhV7bvSw=
 github.com/streamingfast/dauth v0.0.0-20210812020920-1c83ba29add1/go.mod h1:FIYpVqt+ICVuNBoOH3ZIicIctpVoCq3393+RpfXsPEM=
@@ -943,6 +945,8 @@ github.com/streamingfast/logging v0.0.0-20210811175431-f3b44b61606a h1:Hy7ST3+wG
 github.com/streamingfast/logging v0.0.0-20210811175431-f3b44b61606a/go.mod h1:4GdqELhZOXj4xwc4IaBmzofzdErGynnaSzuzxy0ZIBo=
 github.com/streamingfast/logging v0.0.0-20210908162127-bdc5856d5341 h1:+9UISis7a5u0ZDRS5dUWTF23eoKg9qcV4hXUImSEaDc=
 github.com/streamingfast/logging v0.0.0-20210908162127-bdc5856d5341/go.mod h1:4GdqELhZOXj4xwc4IaBmzofzdErGynnaSzuzxy0ZIBo=
+github.com/streamingfast/logging v0.0.0-20220214194203-5c70c134fea8 h1:qFLtOabZG4svQwAVa22KXzvgSMsBWfEQU3pzB8nagPo=
+github.com/streamingfast/logging v0.0.0-20220214194203-5c70c134fea8/go.mod h1:4GdqELhZOXj4xwc4IaBmzofzdErGynnaSzuzxy0ZIBo=
 github.com/streamingfast/opaque v0.0.0-20210811180740-0c01d37ea308 h1:xlWSfi1BoPfsHtPb0VEHGUcAdBF208LUiFCwfaVPfLA=
 github.com/streamingfast/opaque v0.0.0-20210811180740-0c01d37ea308/go.mod h1:K1p8Bj/wG34KJvYzPUqtzpndffmpkrVY11u2hkyxCWQ=
 github.com/streamingfast/pbgo v0.0.6-0.20210811160400-7c146c2db8cc h1:8tTREe7R7ornjEwjeYpLfkk8AdCN+ZAxPuLp0KPL9WI=

@@ -11,7 +11,7 @@ import (
 var zlog = zap.NewNop()
 
 func init() {
-	logging.LibraryLogger("sparkle", "github.com/streamingfast/sparkle/cmd/sparkle", &zlog)
+	zlog, _ = logging.ApplicationLogger("sparkle", "github.com/streamingfast/sparkle/cmd/sparkle")
 }
 
 func main() {
