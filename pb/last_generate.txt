@@ -1,3 +1,0 @@
-generate.sh - Fri 28 Jan 2022 09:37:18 EST - stepd
-streamingfast/proto revision: 1669c68553c3d862dca976fd17cdfcac6753e804
-streamingfast/proto-ethereum revision: 482aee26a4d12a990986563276e8bdaa61a9008f

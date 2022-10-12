@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pbcodec
+package pbeth
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sort"
+	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/streamingfast/bstream"
+	"github.com/streamingfast/eth-go"
 	"github.com/streamingfast/jsonpb"
+	"google.golang.org/protobuf/proto"
 )
 
 var b0 = big.NewInt(0)
@@ -61,12 +64,7 @@ func (b *Block) Num() uint64 {
 }
 
 func (b *Block) Time() (time.Time, error) {
-	timestamp, err := ptypes.Timestamp(b.Header.Timestamp)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("unable to turn google proto Timestamp into time.Time: %s", err)
-	}
-
-	return timestamp, nil
+	return b.Header.Timestamp.AsTime(), nil
 }
 
 func (b *Block) MustTime() time.Time {
@@ -85,11 +83,7 @@ func (b *Block) PreviousID() string {
 // FIXME: This logic at some point is hard-coded and will need to be re-visited in regard
 //        of the fork logic.
 func (b *Block) LIBNum() uint64 {
-	if b.Number == bstream.GetProtocolFirstStreamableBlock {
-		return bstream.GetProtocolFirstStreamableBlock
-	}
-
-	if b.Number <= 200 {
+	if b.Number <= bstream.GetProtocolFirstStreamableBlock+200 {
 		return bstream.GetProtocolFirstStreamableBlock
 	}
 
@@ -113,7 +107,13 @@ func BigIntFromNative(in *big.Int) *BigInt {
 	return &BigInt{Bytes: bytes}
 }
 
+// BigIntFromBytes creates a new `pbeth.BigInt` from the received bytes. If the the received
+// bytes is nil or of length 0, then `nil` is returned directly.
 func BigIntFromBytes(in []byte) *BigInt {
+	if len(in) == 0 {
+		return nil
+	}
+
 	return &BigInt{Bytes: in}
 }
 
@@ -181,9 +181,64 @@ func MustBlockToBuffer(block *Block) []byte {
 	return buf
 }
 
+var polygonSystemAddress = eth.MustNewAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
+
+var polygonNeverRevertedTopic = eth.MustNewBytes("0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63")
+var polygonFeeSystemAddress = eth.MustNewAddress("0x0000000000000000000000000000000000001010")
+
+// polygon has a fee log that will never be skipped even if call failed
+func isPolygonException(log *Log) bool {
+	return bytes.Equal(log.Address, polygonFeeSystemAddress) && len(log.Topics) == 4 && bytes.Equal(log.Topics[0], polygonNeverRevertedTopic)
+}
+
+// NormalizeBlockInPlace
+func (block *Block) NormalizeInPlace() {
+	// We reconstruct the state reverted value per call, for each transaction traces. We also
+	// normalize signature curve points since we were not setting to be alwasy 32 bytes long and
+	// sometimes, it would have been only 31 bytes long.
+	for _, trx := range block.TransactionTraces {
+		trx.PopulateStateReverted()
+		trx.PopulateTrxStatus()
+
+		if len(trx.R) > 0 && len(trx.R) != 32 {
+			trx.R = NormalizeSignaturePoint(trx.R)
+		}
+
+		if len(trx.S) > 0 && len(trx.S) != 32 {
+			trx.S = NormalizeSignaturePoint(trx.S)
+		}
+	}
+
+	// We leverage StateReverted field inside the `PopulateLogBlockIndices`
+	// and as such, it must be invoked after the `PopulateStateReverted` has
+	// been executed.
+	if err := block.PopulateLogBlockIndices(); err != nil {
+		panic(fmt.Errorf("normalizing log block indices: %w", err))
+	}
+}
+
+func NormalizeSignaturePoint(value []byte) []byte {
+	if len(value) == 0 {
+		return value
+	}
+
+	if len(value) < 32 {
+		offset := 32 - len(value)
+
+		out := make([]byte, 32)
+		copy(out[offset:32], value)
+
+		return out
+	}
+
+	return value[0:32]
+}
+
 // PopulateLogBlockIndices fixes the `TransactionReceipt.Logs[].BlockIndex`
 // that is not properly populated by our deep mind instrumentation.
-func (block *Block) PopulateLogBlockIndices() {
+func (block *Block) PopulateLogBlockIndices() error {
+
+	// numbering receipts logs
 	receiptLogBlockIndex := uint32(0)
 	for _, trace := range block.TransactionTraces {
 		for _, log := range trace.Receipt.Logs {
@@ -192,19 +247,77 @@ func (block *Block) PopulateLogBlockIndices() {
 		}
 	}
 
-	callLogBlockIndex := uint32(0)
+	// numbering call logs
+	if block.Ver < 2 { // version 1 compatibility (outcome is imperfect)
+		callLogBlockIndex := uint32(0)
+		for _, trace := range block.TransactionTraces {
+			for _, call := range trace.Calls {
+				for _, log := range call.Logs {
+					if call.StateReverted && !isPolygonException(log) {
+						log.BlockIndex = 0
+					} else {
+						log.BlockIndex = callLogBlockIndex
+						callLogBlockIndex++
+					}
+				}
+			}
+		}
+
+		return nil
+	}
+	var callLogsToNumber []*Log
 	for _, trace := range block.TransactionTraces {
+		if bytes.Equal(polygonSystemAddress, trace.From) { // known "fake" polygon transactions
+			continue
+		}
 		for _, call := range trace.Calls {
 			for _, log := range call.Logs {
-				if call.StateReverted {
+				if call.StateReverted && !isPolygonException(log) {
 					log.BlockIndex = 0
 				} else {
-					log.BlockIndex = callLogBlockIndex
-					callLogBlockIndex++
+					callLogsToNumber = append(callLogsToNumber, log)
 				}
 			}
 		}
 	}
+
+	sort.Slice(callLogsToNumber, func(i, j int) bool { return callLogsToNumber[i].Ordinal < callLogsToNumber[j].Ordinal })
+
+	// also make a map of those logs
+	blockIndexToTraceLog := make(map[uint32]*Log)
+
+	for i := 0; i < len(callLogsToNumber); i++ {
+		log := callLogsToNumber[i]
+		log.BlockIndex = uint32(i)
+		if len(log.Topics) == 1 && len(log.Topics[0]) == 0 {
+			log.Topics = nil
+		}
+		if _, ok := blockIndexToTraceLog[log.BlockIndex]; ok {
+			return fmt.Errorf("duplicate blockIndex in tweak function")
+		}
+		blockIndexToTraceLog[log.BlockIndex] = log
+	}
+
+	// append Ordinal and Index to the receipt log
+	var receiptLogCount int
+	for _, trace := range block.TransactionTraces {
+		for _, log := range trace.Receipt.Logs {
+			receiptLogCount++
+			traceLog, ok := blockIndexToTraceLog[log.BlockIndex]
+			if !ok {
+				return fmt.Errorf("missing tracelog at blockIndex in tweak function")
+			}
+			log.Ordinal = traceLog.Ordinal
+			log.Index = traceLog.Index
+			if !proto.Equal(log, traceLog) {
+				return fmt.Errorf("error in tweak function: log proto not equal")
+			}
+		}
+	}
+	if receiptLogCount != len(blockIndexToTraceLog) {
+		return fmt.Errorf("error incorrect number of receipt logs in tweak function: %d, expecting %d", receiptLogCount, len(blockIndexToTraceLog))
+	}
+	return nil
 }
 
 func (trace *TransactionTrace) PopulateTrxStatus() {
@@ -221,6 +334,13 @@ func (trace *TransactionTrace) PopulateTrxStatus() {
 		}
 	}
 	return
+}
+
+func (call *Call) Method() []byte {
+	if len(call.Input) >= 4 {
+		return call.Input[0:4]
+	}
+	return nil
 }
 
 func (trace *TransactionTrace) PopulateStateReverted() {
@@ -246,4 +366,31 @@ func (trace *TransactionTrace) PopulateStateReverted() {
 	}
 
 	return
+}
+
+func MustBalanceChangeReasonFromString(reason string) BalanceChange_Reason {
+	if reason == "ignored" {
+		panic("receive ignored balance change reason, we do not expect this as valid input for block generation")
+	}
+
+	// There was a typo at some point, let's accept it still until Geth with typo fix is rolled out
+	if reason == "reward_transfaction_fee" {
+		return BalanceChange_REASON_REWARD_TRANSACTION_FEE
+	}
+
+	enumID := BalanceChange_Reason_value["REASON_"+strings.ToUpper(reason)]
+	if enumID == 0 {
+		panic(fmt.Errorf("receive unknown balance change reason, received reason string is %q", reason))
+	}
+
+	return BalanceChange_Reason(enumID)
+}
+
+func MustGasChangeReasonFromString(reason string) GasChange_Reason {
+	enumID := GasChange_Reason_value["REASON_"+strings.ToUpper(reason)]
+	if enumID == 0 {
+		panic(fmt.Errorf("receive unknown gas change reason, received reason string is %q", reason))
+	}
+
+	return GasChange_Reason(enumID)
 }

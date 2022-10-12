@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"github.com/streamingfast/eth-go"
-	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/type/v2"
 )
 
 type BaseEvent struct {

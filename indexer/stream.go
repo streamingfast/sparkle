@@ -14,7 +14,7 @@ import (
 	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/sparkle/blocks"
 	"github.com/streamingfast/sparkle/metrics"
-	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/codec/v1"
+	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/type/v2"
 	"github.com/streamingfast/sparkle/storage"
 	"github.com/streamingfast/sparkle/subgraph"
 	"go.uber.org/zap"
