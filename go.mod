@@ -6,7 +6,6 @@ require (
 	github.com/abourget/llerrgroup v0.2.0
 	github.com/blendle/zapdriver v1.3.1
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
-	github.com/davecgh/go-spew v1.1.1
 	github.com/drone/envsubst v1.0.2
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fsnotify/fsnotify v1.4.9 // indirect

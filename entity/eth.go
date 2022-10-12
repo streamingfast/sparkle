@@ -3,7 +3,6 @@ package entity
 import (
 	"math/big"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/streamingfast/eth-go"
 	pbcodec "github.com/streamingfast/sparkle/pb/sf/ethereum/type/v2"
 )
@@ -66,10 +65,15 @@ func newTransactionFromPBTransaction(t *pbcodec.TransactionTrace) *Transaction {
 	if t == nil {
 		panic("got nil transaction trace")
 	}
-	if t.Value == nil {
-		spew.Dump(t)
-		panic("got nil value on a transaction.")
+	var valueBytes []byte
+	if t.Value != nil {
+		valueBytes = t.Value.Bytes
 	}
+	var gasPriceBytes []byte
+	if t.GasPrice != nil {
+		valueBytes = t.GasPrice.Bytes
+	}
+
 	value := big.Int{}
 	gasPrice := big.Int{}
 	return &Transaction{
@@ -77,9 +81,9 @@ func newTransactionFromPBTransaction(t *pbcodec.TransactionTrace) *Transaction {
 		Index:    t.Index,
 		From:     t.From,
 		To:       t.To,
-		Value:    value.SetBytes(t.Value.Bytes),
+		Value:    value.SetBytes(valueBytes),
 		GasUsed:  t.GasUsed,
-		GasPrice: gasPrice.SetBytes(t.GasPrice.Bytes),
+		GasPrice: gasPrice.SetBytes(gasPriceBytes),
 		Input:    t.Input,
 	}
 }
