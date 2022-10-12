@@ -231,7 +231,7 @@ func (ts *TableShard) Run() (*tableShardMetrics, error) {
 	var endRange uint64
 	zlog.Info("retrieving relevant entity files", zap.String("table_name", ts.tableName))
 	fileCount := 0
-	err := ts.in.Walk(context.Background(), ts.tableName+"/", "", func(filename string) (err error) {
+	err := ts.in.Walk(context.Background(), ts.tableName+"/", func(filename string) (err error) {
 		fileCount++
 		startBlockNum, endBlockNum, err := getBlockRange(filename)
 		if err != nil {

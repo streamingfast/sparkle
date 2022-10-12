@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/streamingfast/dstore"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/streamingfast/dstore"
 )
 
 var parallelCheckCmd = &cobra.Command{
@@ -33,7 +33,7 @@ func runParallelCheck(_ *cobra.Command, _ []string) error {
 
 	seenBlock := false
 	iterBlockNum := uint64(0)
-	err = store.Walk(context.Background(), "", "", func(filename string) (err error) {
+	err = store.Walk(context.Background(), "", func(filename string) (err error) {
 		startBlockNum, stopBlockNum, err := getBlockRange(filename)
 		if err != nil {
 			return err

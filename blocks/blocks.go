@@ -7,8 +7,6 @@ import (
 
 	dfuse "github.com/streamingfast/client-go"
 	"github.com/streamingfast/dgrpc"
-	"github.com/streamingfast/dstore"
-	firehose "github.com/streamingfast/firehose"
 	pbfirehose "github.com/streamingfast/pbgo/sf/firehose/v1"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -29,24 +27,7 @@ type StreamingFastFirehoseFactory struct {
 	streamClient pbfirehose.StreamClient
 }
 
-type LocalFirehoseFactory struct {
-	blockstreamServer *firehose.Server
-}
-
-func (f *LocalFirehoseFactory) StreamBlocks(ctx context.Context, req *pbfirehose.Request) (pbfirehose.Stream_BlocksClient, error) {
-	return f.blockstreamServer.BlocksFromLocal(ctx, req), nil
-}
-
-func NewLocalFirehoseFactory(store dstore.Store) *LocalFirehoseFactory {
-	stores := []dstore.Store{store}
-	return &LocalFirehoseFactory{
-		blockstreamServer: firehose.NewServer(zlog, stores, nil, false, nil, nil, nil, nil, nil),
-	}
-
-}
-
 func NewStreamingFastFirehoseFactory(apiKey string, endpoint string) (*StreamingFastFirehoseFactory, error) {
-
 	zlog.Info("getting API initialToken")
 	dfuseClient, err := dfuse.NewClient("api.streamingfast.io", apiKey)
 	if err != nil {

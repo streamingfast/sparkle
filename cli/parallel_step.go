@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	manifestlib "github.com/streamingfast/sparkle/manifest"
@@ -34,7 +35,9 @@ var parallelStepCmd = &cobra.Command{
 
 func init() {
 	parallelStepCmd.Flags().StringP("rpc-endpoint", "e", "http://localhost:8545", "ETH JSON-RPC Endpoint")
-	parallelStepCmd.Flags().String("blocks-store-url", "gs://dfuseio-global-blocks-us/eth-bsc-mainnet/v1", "dfuse Blocks Store URL")
+	parallelStepCmd.Flags().String("firehose-api-key", "", "your API key (can also be passed by env var STREAMINGFAST_API_KEY)")
+	//parallelStepCmd.Flags().String("blocks-store-url", "gs://dfuseio-global-blocks-us/eth-bsc-mainnet/v1", "dfuse Blocks Store URL")
+	parallelStepCmd.Flags().String("firehose-endpoint", "https://api.streamingfast.io", "dfuse endpoint")
 	parallelStepCmd.Flags().IntP("step", "s", 1, "First step in parallel loader")
 	parallelStepCmd.Flags().BoolP("flush-entities", "b", false, "Flush entities to 'output-path'")
 	parallelStepCmd.Flags().Bool("store-snapshot", true, "Enables snapshot storage in 'output_path' at the end of the batch")
@@ -51,6 +54,8 @@ func init() {
 func runParallelStep(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
 
+	firehoseEndpoint := viper.GetString("parallel-cmd-firehose-endpoint")
+	apiKey := viper.GetString("parallel-cmd-firehose-api-key")
 	startBlock := viper.GetUint64("parallel-cmd-start-block")
 	stopBlock := viper.GetUint64("parallel-cmd-stop-block")
 	rpcEndpoint := viper.GetString("parallel-step-cmd-rpc-endpoint")
@@ -105,10 +110,10 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create output store: %w", err)
 	}
 
-	blocksStore, err := dstore.NewDBinStore(blocksStoreURL)
-	if err != nil {
-		return fmt.Errorf("unable to create blocks store: %w", err)
-	}
+	//	blocksStore, err := dstore.NewDBinStore(blocksStoreURL)
+	//	if err != nil {
+	//		return fmt.Errorf("unable to create blocks store: %w", err)
+	//	}
 
 	subgraphDef := subgraph.MainSubgraphDef
 
@@ -146,7 +151,17 @@ func runParallelStep(cmd *cobra.Command, _ []string) error {
 		ioutil.WriteFile("/tmp/content.json", cnt, 0644)
 	}
 
-	firehoseFactory := blocks.NewLocalFirehoseFactory(blocksStore)
+	if apiKey == "" {
+		apiKey = os.Getenv("STREAMINGFAST_API_KEY")
+		if apiKey == "" {
+			return fmt.Errorf("pass an API key as `STREAMINGFAST_API_KEY` env var, or with --api-key")
+		}
+	}
+
+	firehoseFactory, err := blocks.NewStreamingFastFirehoseFactory(apiKey, firehoseEndpoint)
+	if err != nil {
+		return err
+	}
 
 	sf := func(_ context.Context, _ *zap.Logger, _ *metrics.BlockMetrics, _ *entity.Registry) (storage.Store, error) {
 		return squashableStore, nil

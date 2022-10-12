@@ -6,10 +6,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/streamingfast/bstream/firehose"
-
 	"github.com/golang/protobuf/ptypes"
 	"github.com/streamingfast/bstream"
+	"github.com/streamingfast/bstream/stream"
 	"github.com/streamingfast/dmetrics"
 	pbfirehose "github.com/streamingfast/pbgo/sf/firehose/v1"
 	"github.com/streamingfast/shutter"
@@ -197,7 +196,7 @@ func (s *subgraphStream) streamLoop(streamCtx context.Context, unmarshalledBlock
 		zlog.Info("connecting new streaming")
 		err := s.processNewStream(streamCtx, unmarshalledBlocks)
 		if err != nil {
-			if err == firehose.ErrStopBlockReached {
+			if err == stream.ErrStopBlockReached {
 				return nil
 			}
 			return err
@@ -249,7 +248,7 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 	}
 
 	s.logger.Info("requesting blocks", zap.String("cursor", cursor), zap.Int64("start_block_num", s.startBlock), zap.Uint64("stop_block_num", s.stopBlock))
-	stream, err := s.streamFactory.StreamBlocks(ctx, &pbfirehose.Request{
+	myStream, err := s.streamFactory.StreamBlocks(ctx, &pbfirehose.Request{
 		StartBlockNum:     s.startBlock,
 		StartCursor:       cursor,
 		StopBlockNum:      s.stopBlock,
@@ -270,7 +269,7 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 			return nil
 		}
 
-		response, err := stream.Recv()
+		response, err := myStream.Recv()
 		if (response == nil) && (err == nil) {
 			err = io.EOF // FIXME in bstream lib, stepd hack
 		}
@@ -279,7 +278,7 @@ func (s *subgraphStream) processNewStream(ctx context.Context, unmarshalledBlock
 			if s.stopBlock != 0 {
 				if s.lastBlockRef.Num() == s.stopBlock {
 					s.logger.Info("reached our stop block", zap.Stringer("last_block_ref", s.lastBlockRef))
-					return firehose.ErrStopBlockReached
+					return stream.ErrStopBlockReached
 				}
 				return fmt.Errorf("stream ended with EOF but last block seen %q does not match expected stop block %q", s.lastBlockRef.Num(), s.stopBlock)
 			}

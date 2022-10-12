@@ -30,7 +30,7 @@ type BlockRange struct {
 func (s *store) Preload(ctx context.Context, in dstore.Store) (uint64, uint64, error) {
 	s.logger.Info("prelaoding snapshots")
 	files := []string{}
-	err := in.Walk(context.Background(), "", "", func(filename string) (err error) {
+	err := in.Walk(context.Background(), "", func(filename string) (err error) {
 		files = append(files, filename)
 		return nil
 	})

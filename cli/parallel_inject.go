@@ -319,7 +319,7 @@ func (t *TblShard) injectFile(ctx context.Context, filename string, dbFields, no
 }
 
 func injectFilesToLoad(inputStore dstore.Store, tableName string, stopBlockNum, desiredStartBlockNum uint64) (out []string, err error) {
-	err = inputStore.Walk(context.Background(), tableName+"/", "", func(filename string) (err error) {
+	err = inputStore.Walk(context.Background(), tableName+"/", func(filename string) (err error) {
 		startBlockNum, _, err := getBlockRange(filename)
 		if err != nil {
 			return fmt.Errorf("fail reading block range in %q: %w", filename, err)

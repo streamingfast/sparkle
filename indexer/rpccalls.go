@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -64,7 +65,7 @@ func DoRPCCalls(noArchiveNode bool, blockNum uint64, rpcClient *rpc.Client, rpcC
 		attemptNumber += 1
 		delay = minDuration(time.Duration(attemptNumber*500)*time.Millisecond, 10*time.Second)
 
-		out, err := rpcClient.DoRequests(reqs)
+		out, err := rpcClient.DoRequests(context.Background(), reqs)
 		if err != nil {
 			zlog.Warn("retrying RPCCall on RPC error", zap.Error(err), zap.Uint64("at_block", blockNum))
 			continue
